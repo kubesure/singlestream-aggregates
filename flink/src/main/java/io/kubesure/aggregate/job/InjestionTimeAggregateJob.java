@@ -16,7 +16,6 @@ import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer;
 import org.apache.flink.streaming.util.serialization.JSONKeyValueDeserializationSchema;
 import org.apache.flink.util.Collector;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,19 +32,20 @@ public class InjestionTimeAggregateJob {
 		env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime);
 
 		// DataStream<ProspectCompany> customerStream = Sources.customerSource(env);
-		Properties properties = new Properties();
-		properties.setProperty("bootstrap.servers", "localhost:9092");
-		properties.setProperty("zookeeper.connect", "localhost:2181");
-		properties.setProperty("group.id", "test");
+		// TODO: accept kafka configuration form command line params.
+		Properties propsConsumer = new Properties();
+		propsConsumer.setProperty("bootstrap.servers", "localhost:9092");
+		propsConsumer.setProperty("zookeeper.connect", "localhost:2181");
+		propsConsumer.setProperty("group.id", "aggregateprospectgrp");
 		DataStream<AggregatedProspectCompany> prospectStream = env
 		.addSource(
-			new FlinkKafkaConsumer<>("AggregateProspect", new JSONKeyValueDeserializationSchema(false), properties),
+			new FlinkKafkaConsumer<>("AggregateProspect", new JSONKeyValueDeserializationSchema(false), propsConsumer),
 			"FlinkKafka")
 		.map(new MapToAggreateProspectCompany());
 
 		DataStream<AggregatedProspectCompany> keyedPCStreams = prospectStream
 		.keyBy(r -> r.getId())
-		.timeWindow(Time.minutes(5))
+		.timeWindow(Time.minutes(3))
 		.reduce(new AggregatedProspectCompanyReduce());
 
 		keyedPCStreams.print();
@@ -54,10 +54,18 @@ public class InjestionTimeAggregateJob {
 		
 		aggregatedStream.print();
 
-		/*FlinkKafkaProducer<String> kafkaProducer = new FlinkKafkaProducer<String>
-		("ProspectAggregate", new SimpleStringSchema(),properties,FlinkKafkaProducer.Semantic.AT_LEAST_ONCE);
+		Properties propsProducer = new Properties();
+		propsProducer.setProperty("bootstrap.servers", "localhost:9092");
+		propsProducer.setProperty("zookeeper.connect", "localhost:2181");
+
+		// TODO: replace depricated constuctor   
+		FlinkKafkaProducer<String> kafkaProducer = new FlinkKafkaProducer<String>(
+			"ProspectAggregated", new SimpleStringSchema(),propsConsumer
+		);
+
 		kafkaProducer.setWriteTimestampToKafka(true);
-		aggregatedStream.addSink(kafkaProducer);*/
+
+		aggregatedStream.addSink(kafkaProducer);
 		env.execute("injestion-time-aggregate");
 	}
 
@@ -76,7 +84,7 @@ public class InjestionTimeAggregateJob {
 		public AggregatedProspectCompany map(ObjectNode node) throws Exception {
 
 			try {
-				log.info("prospect>" + node.get("value").toString());
+				log.info("prospect> " + node.get("value").toString());
 				ProspectCompany pc = Convertor.convertToProspectCompany(node.get("value").toString());
 				AggregatedProspectCompany apc = new AggregatedProspectCompany();
 				apc.addCompany(pc);
@@ -119,6 +127,7 @@ public class InjestionTimeAggregateJob {
 		}
 	}
 
+	// TODO: KeyProcessFunction not required 
 	private static class ProspectCompanyFunction
 			extends KeyedProcessFunction<String, ProspectCompany, ProspectCompany> {
 		@Override
