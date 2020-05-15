@@ -94,7 +94,9 @@ public class Prospect implements Comparable<Prospect>{
     public Prospect(String cif,String firstName, String lastName,Long timestamp){
         this.cif = cif;
         this.timestamp = timestamp;
-    }   
+    }
+    
+    public Prospect(){}
 
     public int compareTo(Prospect customer){
            return Long.compare(this.timestamp, customer.timestamp); 
@@ -102,7 +104,11 @@ public class Prospect implements Comparable<Prospect>{
 
     public String toString(){
         StringBuilder sb = new StringBuilder();
-        sb.append("Customer - ").append(cif).append(" Account - ").append(account);
+        sb.append("Customer CIF- ").append(cif).
+        append(" Id - ").append(id).
+        append(" First Name - ").append(firstName).
+        append(" Last Name - ").append(lastName).
+        append(" isMatch - ").append(match);
         return sb.toString();
     }
 

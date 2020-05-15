@@ -6,11 +6,11 @@ import java.util.List;
 public class ProspectCompany {
 
     private String id;
-    private List<Prospect> shareHolders;
     private String companyName;
     private String tradeLicenseNumber;
     private boolean match;
     private Long timestamp;
+    private List<Prospect> shareHolders;
 
     public ProspectCompany(String id, String companyName, String tradeLicenseNumber, boolean match) {
         shareHolders = new ArrayList<Prospect>();
