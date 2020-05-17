@@ -28,20 +28,34 @@ public class InjestionTimeAggregateJob {
 	private static final Logger log = LoggerFactory.getLogger(InjestionTimeAggregateJob.class);
 
 	public static void main(String[] args) throws Exception {
+
+		
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 		env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime);
 
 		// DataStream<ProspectCompany> customerStream = Sources.customerSource(env);
-		// TODO: accept kafka configuration form command line params.
-		Properties propsConsumer = new Properties();
-		propsConsumer.setProperty("bootstrap.servers", "localhost:9092");
-		propsConsumer.setProperty("zookeeper.connect", "localhost:2181");
-		propsConsumer.setProperty("group.id", "aggregateprospectgrp");
-		DataStream<AggregatedProspectCompany> prospectStream = env
-		.addSource(
-			new FlinkKafkaConsumer<>("AggregateProspect", new JSONKeyValueDeserializationSchema(false), propsConsumer),
-			"FlinkKafka")
-		.map(new MapToAggreateProspectCompany());
+		DataStream<ObjectNode> kafkaProspectStream;
+		try {
+			// TODO: accept kafka configuration form command line params.
+			Properties propsConsumer = new Properties();
+			propsConsumer.setProperty("bootstrap.servers", "localhost:9092");
+			propsConsumer.setProperty("zookeeper.connect", "localhost:2181");
+			propsConsumer.setProperty("group.id", "aggregateprospectgrp");
+			kafkaProspectStream = env.addSource(
+				new FlinkKafkaConsumer<>(
+								"AggregateProspect", 
+								new JSONKeyValueDeserializationSchema(false), 
+								propsConsumer),
+			"Kafka-prospect-stream-source");	
+		} catch (Exception kce) {
+			//TODO: handle exception
+			log.error("Error reading kafka message from Topic AggregateProspect", kce);
+			throw kce;
+		}
+		
+
+		DataStream<AggregatedProspectCompany> prospectStream =	
+		                                            kafkaProspectStream.map(new MapToAggreateProspectCompany());
 
 		DataStream<AggregatedProspectCompany> keyedPCStreams = prospectStream
 		.keyBy(r -> r.getId())
@@ -54,19 +68,21 @@ public class InjestionTimeAggregateJob {
 		
 		aggregatedStream.print();
 
-		Properties propsProducer = new Properties();
-		propsProducer.setProperty("bootstrap.servers", "localhost:9092");
-		propsProducer.setProperty("zookeeper.connect", "localhost:2181");
-
-		// TODO: replace depricated constuctor   
-		FlinkKafkaProducer<String> kafkaProducer = new FlinkKafkaProducer<String>(
-			"ProspectAggregated", new SimpleStringSchema(),propsConsumer
-		);
-
-		kafkaProducer.setWriteTimestampToKafka(true);
-
-		aggregatedStream.addSink(kafkaProducer);
-		env.execute("injestion-time-aggregate");
+		try {
+			Properties propsProducer = new Properties();
+			propsProducer.setProperty("bootstrap.servers", "localhost:9092");
+			propsProducer.setProperty("zookeeper.connect", "localhost:2181");
+			// TODO: replace depricated constuctor   
+			FlinkKafkaProducer<String> kafkaProducer = new FlinkKafkaProducer<String>(
+						"ProspectAggregated", new SimpleStringSchema(),propsProducer
+			);
+			kafkaProducer.setWriteTimestampToKafka(true);
+			aggregatedStream.addSink(kafkaProducer);	
+		} catch (Exception kpe) {
+			log.error("Error sending message to sink topic", kpe);
+		}
+		
+		env.execute("injestion-time-aggregation");
 	}
 
 	private static class AggregatedProspectCompanyReduce implements ReduceFunction<AggregatedProspectCompany> {
@@ -111,6 +127,7 @@ public class InjestionTimeAggregateJob {
 		}	
 	}
 
+	// TODO: not used remove. 
 	private static class MapToProspect implements MapFunction<ObjectNode, ProspectCompany> {
 
 		@Override
@@ -127,7 +144,7 @@ public class InjestionTimeAggregateJob {
 		}
 	}
 
-	// TODO: KeyProcessFunction not required 
+	// TODO: KeyProcessFunction not required. remove.
 	private static class ProspectCompanyFunction
 			extends KeyedProcessFunction<String, ProspectCompany, ProspectCompany> {
 		@Override
