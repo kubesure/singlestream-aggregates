@@ -2,6 +2,8 @@ kafka-topics --create --bootstrap-server localhost:9092 --partitions 1 --replica
 
 kafka-topics --create --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --topic ProspectAggregated
 
+kafka-topics --create --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --topic ProspectAggregated-dl
+
 kafka-topics --describe --bootstrap-server localhost:9092 --topic ProspectAggregated
 
 kafka-topics --zookeeper localhost:2181 --alter --topic AggregateProspect --config retention.ms=100
@@ -11,6 +13,8 @@ kafka-console-producer --broker-list localhost:9092 --topic AggregateProspect
 kafka-console-consumer --bootstrap-server localhost:9092 --topic AggregateProspect
 
 kafka-console-consumer --bootstrap-server localhost:9092 --topic ProspectAggregated
+
+kafka-console-consumer --bootstrap-server localhost:9092 --topic ProspectAggregated-dl
 
 
 {
@@ -46,9 +50,11 @@ Injestion time cases
 
 1. Send 10 match messages in parallel.
 2. send 9 with T 1 message sent with T + 5 seconds. 
+    Outcome..  
     1. 9 aggregates messages 
     2. 1 aggregated along on T.
 3. Send 1 validation error match out of 10 
+    Outcome...
     1. Error match shoud be send to Dead letter Q
     2. Should be reported a error metric.
 4. Generate error during stream processing and check that it should be delivered exactly once.

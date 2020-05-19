@@ -2,6 +2,7 @@ package io.kubesure.aggregate.job;
 
 import java.util.Properties;
 
+import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
@@ -14,8 +15,10 @@ import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer;
-import org.apache.flink.streaming.util.serialization.JSONKeyValueDeserializationSchema;
+// import org.apache.flink.streaming.util.serialization.JSONKeyValueDeserializationSchema;
 import org.apache.flink.util.Collector;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,33 +32,23 @@ public class InjestionTimeAggregateJob {
 
 	public static void main(String[] args) throws Exception {
 
-		
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 		env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime);
 
 		// DataStream<ProspectCompany> customerStream = Sources.customerSource(env);
-		DataStream<ObjectNode> kafkaProspectStream;
-		try {
+		//DataStream<ObjectNode> kafkaProspectStream;
+		DataStream<String> kafkaProspectStream;
 			// TODO: accept kafka configuration form command line params.
-			Properties propsConsumer = new Properties();
-			propsConsumer.setProperty("bootstrap.servers", "localhost:9092");
-			propsConsumer.setProperty("zookeeper.connect", "localhost:2181");
-			propsConsumer.setProperty("group.id", "aggregateprospectgrp");
+			Properties propsConsumer = kafkaConsumerProperties();
 			kafkaProspectStream = env.addSource(
 				new FlinkKafkaConsumer<>(
 								"AggregateProspect", 
-								new JSONKeyValueDeserializationSchema(false), 
+								new SimpleStringSchema(), 
 								propsConsumer),
 			"Kafka-prospect-stream-source");	
-		} catch (Exception kce) {
-			//TODO: handle exception
-			log.error("Error reading kafka message from Topic AggregateProspect", kce);
-			throw kce;
-		}
 		
-
-		DataStream<AggregatedProspectCompany> prospectStream =	
-		                                            kafkaProspectStream.map(new MapToAggreateProspectCompany());
+		DataStream<AggregatedProspectCompany> prospectStream =	kafkaProspectStream
+		.flatMap(new FlatMapToAggreateProspectCompany());
 
 		DataStream<AggregatedProspectCompany> keyedPCStreams = prospectStream
 		.keyBy(r -> r.getId())
@@ -69,20 +62,14 @@ public class InjestionTimeAggregateJob {
 		aggregatedStream.print();
 
 		try {
-			Properties propsProducer = new Properties();
-			propsProducer.setProperty("bootstrap.servers", "localhost:9092");
-			propsProducer.setProperty("zookeeper.connect", "localhost:2181");
-			// TODO: replace depricated constuctor   
-			FlinkKafkaProducer<String> kafkaProducer = new FlinkKafkaProducer<String>(
-						"ProspectAggregated", new SimpleStringSchema(),propsProducer
-			);
-			kafkaProducer.setWriteTimestampToKafka(true);
+			Properties propsProducer = newKafkaFlinkProducerProps();
+			FlinkKafkaProducer<String> kafkaProducer = newFlinkKafkaProducer();
 			aggregatedStream.addSink(kafkaProducer);	
 		} catch (Exception kpe) {
 			log.error("Error sending message to sink topic", kpe);
 		}
-		
 		env.execute("injestion-time-aggregation");
+		
 	}
 
 	private static class AggregatedProspectCompanyReduce implements ReduceFunction<AggregatedProspectCompany> {
@@ -93,27 +80,106 @@ public class InjestionTimeAggregateJob {
 		}
 	}
 
-	private static class MapToAggreateProspectCompany implements MapFunction<ObjectNode, AggregatedProspectCompany> {
+	private static class FlatMapToAggreateProspectCompany implements FlatMapFunction<String, AggregatedProspectCompany> {
+		@Override
+		public void flatMap(String prospectCompany,  Collector<AggregatedProspectCompany> collector){
+
+			KafkaProducer<String,String> producer = null;
+			ProducerRecord<String,String> producerRec = null;	
+			try {
+				ProspectCompany pc = Convertor.convertToProspectCompany(prospectCompany);
+				AggregatedProspectCompany apc = new AggregatedProspectCompany();
+				apc.addCompany(pc);
+				apc.setId(pc.getId());
+				collector.collect(apc);
+			} catch (Exception e) {
+				log.error("Error deserialzing Prospect company", e);
+				producer = newKakfaProducer();
+				// TODO: Define new error message payload 
+				producerRec = new ProducerRecord<String,String>
+								   ("ProspectAggregated-dl",e.getMessage());
+				// TODO: Implement a async send
+				try {
+					producer.send(producerRec).get();
+				}catch(Exception kse){
+					log.error("Error writing message to dead letter Q", kse);
+				}
+			}finally{
+				if(producer != null){
+					producer.close();
+				}				
+			}
+		}
+	}
+
+	// TODO: Used FlatMapToAggreateProspectCompany for better error handling
+	private static class MapToAggreateProspectCompany implements MapFunction<String, AggregatedProspectCompany> {
 		private static final long serialVersionUID = -6867736771747690202L;
 
 		@Override
-		public AggregatedProspectCompany map(ObjectNode node) throws Exception {
+		public AggregatedProspectCompany map(String prospectCompany) throws Exception {
 
 			try {
-				log.info("prospect> " + node.get("value").toString());
-				ProspectCompany pc = Convertor.convertToProspectCompany(node.get("value").toString());
+				//log.info("prospect> " + node.get("value").toString());
+				// ProspectCompany pc = Convertor.convertToProspectCompany(node.get("value").toString());
+				ProspectCompany pc = Convertor.convertToProspectCompany(prospectCompany);
 				AggregatedProspectCompany apc = new AggregatedProspectCompany();
 				apc.addCompany(pc);
 				apc.setId(pc.getId());
 				return apc;	
 			} catch (Exception e) {
-				// TODO: handle exception post error to dead letter for re-processing.
-				log.error("Error deserialzing Prospect Company", e);
+				log.error("Error deserialzing Prospect company", e);
+				KafkaProducer<String,String> producer = newKakfaProducer();
+				// TODO: Define new error message payload 
+				ProducerRecord<String,String> producerRec = new ProducerRecord<String,String>
+								   ("ProspectAggregated-dl",e.getMessage());
+				// TODO: Implement a async send
+				producer.send(producerRec).get();
 			}
 			return null;
 		}
 	}
 
+	private static KafkaProducer<String,String> newKakfaProducer(){
+		Properties properties = new Properties();
+		properties.setProperty("bootstrap.servers", "localhost:9092");
+		properties.setProperty("zookeeper.connect", "localhost:2181");
+		properties.put("key.serializer","org.apache.kafka.common.serialization.StringSerializer");
+		properties.put("value.serializer","org.apache.kafka.common.serialization.StringSerializer");
+		KafkaProducer<String,String> producer = new KafkaProducer<String,String>(properties); 
+		return producer;
+	} 
+
+	private static FlinkKafkaProducer<String> newFlinkKafkaProducer() {
+		// TODO: replace depricated constuctor
+		Properties propsProducer = new Properties();
+		propsProducer.setProperty("bootstrap.servers", "localhost:9092");
+		propsProducer.setProperty("zookeeper.connect", "localhost:2181");   
+		FlinkKafkaProducer<String> kafkaProducer = new FlinkKafkaProducer<String>(
+					"ProspectAggregated", new SimpleStringSchema(),propsProducer
+		);
+		kafkaProducer.setWriteTimestampToKafka(true);
+		return kafkaProducer;
+	}
+
+	private static Properties kafkaConsumerProperties() {
+		Properties propsConsumer = new Properties();
+		propsConsumer.setProperty("bootstrap.servers", "localhost:9092");
+		propsConsumer.setProperty("zookeeper.connect", "localhost:2181");
+		propsConsumer.setProperty("group.id", "aggregateprospectgrp");
+		return propsConsumer;
+	}
+
+	private static Properties newKafkaFlinkProducerProps() {
+		Properties propsProducer = new Properties();
+		propsProducer.setProperty("bootstrap.servers", "localhost:9092");
+		propsProducer.setProperty("zookeeper.connect", "localhost:2181");
+		//propsProducer.put("key.serializer","org.apache.kafka.common.serialization.StringSerializer");
+		//propsProducer.put("value.serializer","org.apache.kafka.common.serialization.StringSerializer");
+		return propsProducer;
+	}
+
+	// TODO: Not used remove
 	private static class MapAggregatedProspectToString implements MapFunction<AggregatedProspectCompany, String> {
 		@Override
 		public String map(AggregatedProspectCompany agpc) throws Exception {
