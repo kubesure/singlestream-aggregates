@@ -48,12 +48,12 @@ public class ProspectCompany {
         this.match = match;
     }
 
-    public String getTradeId() {
+    public String getTradeLicenseNumber() {
         return tradeLicenseNumber;
     }
 
-    public void setTradeId(String tradeId) {
-        this.tradeLicenseNumber = tradeId;
+    public void setTradeLicenseNumber(String tradeLicenseNumber) {
+        this.tradeLicenseNumber = tradeLicenseNumber;
     }
 
     public String getCompanyName() {
@@ -65,7 +65,11 @@ public class ProspectCompany {
     }
 
     public void addShareHolder(Prospect shareHolder) {
-        shareHolders.add(shareHolder);
+        this.shareHolders.add(shareHolder);
+    }
+
+    public void setShareHolders(List<Prospect> shareHolders) {
+        this.shareHolders = shareHolders;
     }
     
     public List<Prospect> getShareHolders(){

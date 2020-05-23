@@ -14,7 +14,7 @@ public class Prospect implements Comparable<Prospect>{
     private boolean match;
     private Long timestamp;
 
-    public Prospect(String id, String firstName, String lastName, boolean match) {
+    public Prospect(String id, String firstName, String lastName, boolean match, Long timestamp) {
         this.id=id;
         this.firstName=firstName;
         this.lastName=lastName;

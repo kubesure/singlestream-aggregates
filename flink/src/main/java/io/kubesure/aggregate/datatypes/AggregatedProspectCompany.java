@@ -7,9 +7,18 @@ public class AggregatedProspectCompany {
 
     private String id;
     private List<ProspectCompany> companies;
+    private Long timestamp;
 
     public AggregatedProspectCompany() {
         this.companies = new ArrayList<ProspectCompany>();
+    }
+
+    public Long getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(Long timestamp) {
+        this.timestamp = timestamp;
     }
 
     public String getId() {

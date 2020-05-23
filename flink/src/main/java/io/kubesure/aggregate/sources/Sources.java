@@ -1,28 +1,29 @@
 package io.kubesure.aggregate.sources;
 
+import java.util.Calendar;
+
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
-import org.apache.flink.streaming.api.watermark.Watermark;
 
 import io.kubesure.aggregate.datatypes.Prospect;
 import io.kubesure.aggregate.datatypes.ProspectCompany;
 
 public class Sources {
 
-    public static DataStream<ProspectCompany> customerSource(StreamExecutionEnvironment env){
+    public static DataStream<ProspectCompany> ProspectCompanySource(StreamExecutionEnvironment env){
 
-        DataStream<ProspectCompany> customers = env.addSource(new SourceFunction<ProspectCompany>() {
+        DataStream<ProspectCompany> prospects = env.addSource(new SourceFunction<ProspectCompany>() {
             private volatile boolean running = true;
 
             @Override
             public void run(SourceContext<ProspectCompany> sc) throws Exception {
 
                 ProspectCompany pc = new ProspectCompany("789", "Skynight Inc", "Trd4534rF", false);
-                pc.addShareHolder(new Prospect("123", "Prashant", "Patel", false));
-                sc.collectWithTimestamp(pc,0);
-                sc.emitWatermark(new Watermark(0));
-                Thread.sleep(2000);
+                Prospect p = new Prospect("123", "Prashant", "Patel", false, Calendar.getInstance().getTimeInMillis());
+                pc.addShareHolder(p);
+                sc.collectWithTimestamp(pc, p.getTimestamp());
+                Thread.sleep(1000);
 
                 while (running) {
 					Thread.sleep(1000);
@@ -34,7 +35,7 @@ public class Sources {
                 running = false;
             }
         });
-
-        return customers;
+        return prospects;
     }
+    
 }
