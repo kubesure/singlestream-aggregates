@@ -40,9 +40,19 @@ kafka-console-consumer --bootstrap-server localhost:9092 --topic ProspectAggrega
     ]
 }
 
-{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"shareHolders": [{"id": 12121,"cif": "cif","firstName": "Prashant","lastName": "Patel","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
+{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-25 00:12:30","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Prashant","lastName": "Patel","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
 
-{"id": 67890,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"shareHolders": [{"id": 12121,"cif": "cif","firstName": "Prashant","lastName": "Patel","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
+{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-22T15:23:48Z","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Usha","lastName": "Patel","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
+
+{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-22T12:16:49Z","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Kamya","lastName": "Shah","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
+
+{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-22T12:16:50Z","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Ritesh","lastName": "Shah","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
+
+{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-22T12:16:54Z","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Chaitali","lastName": "Shah","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
+
+{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-22T12:16:60Z","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Mahesh","lastName": "Patel","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
+
+{"id": 67890,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-22T12:16:44Z","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Prashant","lastName": "Patel","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
 
 ## Test cases - Each prospect match consists of mutiple match sources. The test case are tests against 10 match sources. All match result to complete with in T time in seconds.  
 

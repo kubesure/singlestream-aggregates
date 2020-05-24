@@ -5,27 +5,26 @@ public class Prospect implements Comparable<Prospect>{
 
     private static final long serialVersionUID = 1L;
 
-    private String id;
+    private Long id;
     private String cif;
     private String account;
     private String firstName;
     private String lastName;
     private String fullName;
     private boolean match;
-    private Long timestamp;
 
-    public Prospect(String id, String firstName, String lastName, boolean match, Long timestamp) {
+    public Prospect(Long id, String firstName, String lastName, boolean match) {
         this.id=id;
         this.firstName=firstName;
         this.lastName=lastName;
         this.match=match;
     }
 
-    public void setId(String id){
+    public void setId(long id){
         this.id = id;
     }
 
-    public String getId() {
+    public long getId() {
         return id;
     }
 
@@ -69,14 +68,6 @@ public class Prospect implements Comparable<Prospect>{
         return account;
     }
 
-    public void setTimestamp(Long timestamp) {
-        this.timestamp = timestamp;
-    }
-
-    public Long getTimestamp() {
-        return timestamp;
-    }
-
     public String getCif(){
         return cif;
     }
@@ -85,21 +76,10 @@ public class Prospect implements Comparable<Prospect>{
         this.cif = cif;
     }
 
-    public Prospect(String cif,String account, Long timestamp){
-        this.cif = cif;
-        this.account = account;
-        this.timestamp = timestamp;
-    }
-
-    public Prospect(String cif,String firstName, String lastName,Long timestamp){
-        this.cif = cif;
-        this.timestamp = timestamp;
-    }
-    
     public Prospect(){}
 
-    public int compareTo(Prospect customer){
-           return Long.compare(this.timestamp, customer.timestamp); 
+    public int compareTo(Prospect prospect){
+           return Long.compare(this.id, prospect.id); 
     }
 
     public String toString(){
@@ -118,7 +98,7 @@ public class Prospect implements Comparable<Prospect>{
             return true;
         } else if (o != null && getClass() == o.getClass()) {
             Prospect that = (Prospect) o;
-            return ( (this.cif.equals(that.cif)) && (this.timestamp.equals(that.timestamp)) ); 
+            return ( (this.cif.equals(that.cif)) && (this.id.equals(that.id))); 
         }
         return false;
     }

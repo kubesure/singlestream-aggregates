@@ -10,8 +10,12 @@ import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.AssignerWithPeriodicWatermarks;
+import org.apache.flink.streaming.api.functions.AssignerWithPunctuatedWatermarks;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
@@ -30,53 +34,38 @@ import io.kubesure.aggregate.util.Convertor;
 public class EventTimeAggregateJob {
 
 	private static final Logger log = LoggerFactory.getLogger(EventTimeAggregateJob.class);
+	private static OutputTag<ProspectCompany> lateEvents = new OutputTag<ProspectCompany>("late-prospects"){
+		private static final long serialVersionUID = -686876771742345642L;
+	};
 
 	public static void main(String[] args) throws Exception {
 
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-		env.getConfig().setAutoWatermarkInterval(1000l);
+		env.getConfig().setAutoWatermarkInterval(500l);
 
-		// TODO: accept kafka configuration form command line params.
+		// TODO: accept kafka configuration form paramtool.
 		Properties propsConsumer = kafkaConsumerProperties();
-		FlinkKafkaConsumer<String> kafkaConsumer = new FlinkKafkaConsumer<>("AggregateProspect", 
-																		   new SimpleStringSchema(), 
-																		   propsConsumer);
-		DataStream<String> source = env.addSource(kafkaConsumer).uid("prospect source");
-		DataStream<ProspectCompany> prospectStream = source
-			 	.flatMap(new FlatMapToAggreateProspectCompany()).uid("Flat map source stream");
-				
-		//test source 		 
-		//DataStream<ProspectCompany> source = env.addSource(new ProspectCompanySources()).uid("prospect source");
-		//DataStream<ProspectCompany> source = Sources.ProspectCompanySource(env);
-		//test source
-			
-				
-		DataStream<ProspectCompany> prospectStreamAssgined = prospectStream.assignTimestampsAndWatermarks
-		(new BoundedOutOfOrdernessTimestampExtractor<ProspectCompany>(Time.seconds(5)) {
+		DataStream<ProspectCompany> input = env
+		            .addSource(
+						new FlinkKafkaConsumer<>(
+							"AggregateProspect", 
+							new SimpleStringSchema(), 
+							propsConsumer))
+					.flatMap(new FlatMapToAggreateProspectCompany())
+					.assignTimestampsAndWatermarks(new BoundedOutOfOrdernessGenerator());
 
-			private static final long serialVersionUID = -686876771747650642L;
-
-			@Override
-			public long extractTimestamp(ProspectCompany element) {
-				return element.getTimestamp();
-			}
-		}).uid("Bounded OOO TS extractor");	
+																		   
+		DataStream<AggregatedProspectCompany> aggregateStream = input
+		        				.keyBy(r -> r.getId())
+								.timeWindow(Time.seconds(30))
+								.sideOutputLateData(lateEvents)
+								.process(new ProspectCompanyProcessFunction());
+		aggregateStream.print("Print aggregated prospect company");
 		
-		final OutputTag<ProspectCompany> lateEvent = new OutputTag<ProspectCompany>("late-prospects"){};
-
-		DataStream<AggregatedProspectCompany> keyedPCStreams = prospectStreamAssgined.keyBy(r -> r.getId())
-				.timeWindow(Time.seconds(30))
-				.allowedLateness(Time.seconds(10))
-				.sideOutputLateData(lateEvent)
-				.aggregate(new ProspectAccumalator(),
-				        new KeyedWindowedAggregatedProspectCompanyProcess()).uid("keyed window stream");
-				//.reduce(new AggregatedProspectCompanyReduce());
-		keyedPCStreams.print().uid("Print keyed prospect company");
-
-		DataStream<String> aggregatedStream = keyedPCStreams.map(new MapAggregatedProspectToString());
-		aggregatedStream.print("print aggregated prospects");
-
+		//DataStream<String> aggregatedStream = keyedPCStreams.map(new MapAggregatedProspectToString());
+		//aggregatedStream.print("Print JSON aggregated prospects");
+ 
 		/*try {
 			FlinkKafkaProducer<String> kafkaProducer = newFlinkKafkaProducer();
 			aggregatedStream.addSink(kafkaProducer).uid("Merged kafka stream");
@@ -87,67 +76,46 @@ public class EventTimeAggregateJob {
 
 	}
 
-	final OutputTag<ProspectCompany> outputTag = new OutputTag<ProspectCompany>("late-prospects") {};
-
-	private static class ProspectAccumalator implements AggregateFunction
-	                                           <ProspectCompany,AggregatedProspectCompany,AggregatedProspectCompany> {
-
-		private static final long serialVersionUID = -686124671747650642L;										
-		private static final Logger log = LoggerFactory.getLogger(ProspectAccumalator.class);
-
-		@Override
-		public AggregatedProspectCompany createAccumulator() {
-			return new AggregatedProspectCompany();
-		}
-
-		@Override
-		public AggregatedProspectCompany add(ProspectCompany value, AggregatedProspectCompany accumulator) {
-			accumulator.addCompany(value);
-			return accumulator;
-		}
-
-		@Override
-		public AggregatedProspectCompany getResult(AggregatedProspectCompany accumulator) {
-			return accumulator;
-		}
-
-		@Override
-		public AggregatedProspectCompany merge(AggregatedProspectCompany a, AggregatedProspectCompany b) {
-			
-			return a;
-		}
-
-	} 
-
-	private static class KeyedWindowedAggregatedProspectCompanyProcess extends 
-									ProcessWindowFunction<AggregatedProspectCompany, AggregatedProspectCompany,String,TimeWindow	> {
-
-		private static final long serialVersionUID = -686876771757650202L;				
-		final OutputTag<ProspectCompany> lateEvent = new OutputTag<ProspectCompany>("late-prospects"){};
 		
-		@Override
-		public void process
-					(String key,
-					 Context context,
-					 Iterable<AggregatedProspectCompany> inputs,
-					 Collector<AggregatedProspectCompany> out) {
+	public static class BoundedOutOfOrdernessGenerator implements AssignerWithPeriodicWatermarks<ProspectCompany> {
+		private static final long serialVersionUID = -686873471234753642L;	
+		private long maxOutOfOrderness = 5000; // 3.5 seconds
+		private long currentMaxTimestamp;
 
-			AggregatedProspectCompany agpc = inputs.iterator().next();
-			if(agpc.getTimestamp() < context.currentProcessingTime()) {
-				context.output(lateEvent, agpc.getProspectCompany());
-			} else {
-				out.collect(agpc);	
-			}	
+		private BoundedOutOfOrdernessGenerator(){};
+
+		private BoundedOutOfOrdernessGenerator(Time time){
+			maxOutOfOrderness = time.toMilliseconds();
+		}
+	
+		@Override
+		public long extractTimestamp(ProspectCompany element, long previousElementTimestamp) {
+			long timestamp = element.getEventTime().getMillis();
+			currentMaxTimestamp = Math.max(timestamp, currentMaxTimestamp);
+			return timestamp;
+		}
+	
+		@Override
+		public Watermark getCurrentWatermark() {
+			return new Watermark(currentMaxTimestamp - maxOutOfOrderness);
 		}
 	}
 
-	private static class AggregatedProspectCompanyReduce implements ReduceFunction<AggregatedProspectCompany> {
+	private static class ProspectCompanyProcessFunction extends ProcessWindowFunction<ProspectCompany,AggregatedProspectCompany,
+																				Long,TimeWindow>{
 
-		private static final long serialVersionUID = -686876771747650202L;
+		private static final long serialVersionUID = -686876771747690123L;
 
-		public AggregatedProspectCompany reduce(AggregatedProspectCompany agc1, AggregatedProspectCompany agc2) {
-			agc1.addCompany(agc2.getProspectCompany());
-			return agc1;
+		@Override
+		public void process(Long key,
+				ProcessWindowFunction<ProspectCompany, AggregatedProspectCompany, Long, TimeWindow>.Context context,
+				Iterable<ProspectCompany> elements, Collector<AggregatedProspectCompany> out) throws Exception {
+
+				AggregatedProspectCompany agpc = new AggregatedProspectCompany();
+				for (ProspectCompany pc : elements) {
+						agpc.addCompany(pc);
+				} 
+				out.collect(agpc);		
 		}
 	}
 
@@ -163,9 +131,6 @@ public class EventTimeAggregateJob {
 			ProducerRecord<String, String> producerRec = null;
 			try {
 				ProspectCompany pc = Convertor.convertToProspectCompany(prospectCompany);
-				//AggregatedProspectCompany apc = new AggregatedProspectCompany();
-				//apc.addCompany(pc);
-				//apc.setId(pc.getId());
 				collector.collect(pc);
 			} catch (Exception e) {
 				log.error("Error deserialzing Prospect company", e);
@@ -193,13 +158,90 @@ public class EventTimeAggregateJob {
 		@Override
 		public String map(AggregatedProspectCompany agpc) throws Exception {
 			try {
-				return Convertor.convertAggregatedProspectCompanyToJson(agpc);
+				// return Convertor.convertAggregatedProspectCompanyToJson(agpc);
+				return "";
 			} catch (Exception e) {
 				// TODO: handle exception post error to dead letter for re-processing.
 				log.error("Error serialzing aggregate prospect company", e);
 			}
 			return null;
 		}	
+	}
+
+	private static class LateProspectFilter extends ProcessFunction<ProspectCompany,ProspectCompany>{
+		private static final long serialVersionUID = -686876771234753642L;	
+			@Override
+			public void processElement(ProspectCompany prospectCompany,
+					ProcessFunction<ProspectCompany, ProspectCompany>.Context ctx, Collector<ProspectCompany> out)
+					throws Exception {
+						if(prospectCompany.getEventTime().getMillis() < ctx.timerService().currentWatermark()) {
+							ctx.output(lateEvents, prospectCompany);
+						}	
+			}
+	}
+
+	private static class KeyedWindowedAggregatedProspectProcess extends 
+									ProcessWindowFunction<ProspectCompany, AggregatedProspectCompany,Long,TimeWindow	> {
+
+		private static final long serialVersionUID = -686876771757650202L;				
+		
+		@Override
+		public void process
+					(Long key,
+					 Context context,
+					 Iterable<ProspectCompany> inputs,
+					 Collector<AggregatedProspectCompany> out) {
+
+			ProspectCompany pc = inputs.iterator().next();
+			if(pc.getEventTime().getMillis() < context.currentProcessingTime()) {
+				context.output(lateEvents, pc);
+			} else {
+				AggregatedProspectCompany agpc = new AggregatedProspectCompany();
+				for (ProspectCompany itrPc : inputs) {
+					agpc.addCompany(itrPc);
+				} 
+				out.collect(agpc);	
+			}	
+		}
+	}
+
+	private static class AggregatedProspectCompanyReduce implements ReduceFunction<AggregatedProspectCompany> {
+
+		private static final long serialVersionUID = -686876771747650202L;
+
+		public AggregatedProspectCompany reduce(AggregatedProspectCompany agc1, AggregatedProspectCompany agc2) {
+			agc1.addCompany(agc2.getProspectCompany());
+			return agc1;
+		}
+	}
+
+	private static class ProspectAccumalator implements AggregateFunction
+	                                           <ProspectCompany,AggregatedProspectCompany,AggregatedProspectCompany> {
+
+		private static final long serialVersionUID = -686124671747650642L;										
+		private static final Logger log = LoggerFactory.getLogger(ProspectAccumalator.class);
+
+		@Override
+		public AggregatedProspectCompany createAccumulator() {
+			return new AggregatedProspectCompany();
+		}
+
+		@Override
+		public AggregatedProspectCompany add(ProspectCompany value, AggregatedProspectCompany accumulator) {
+			accumulator.addCompany(value);
+			return accumulator;
+		}
+
+		@Override
+		public AggregatedProspectCompany getResult(AggregatedProspectCompany accumulator) {
+			return accumulator;
+		}
+
+		@Override
+		public AggregatedProspectCompany merge(AggregatedProspectCompany a, AggregatedProspectCompany b) {
+			return a;
+		}
+
 	}
 
 	private static KafkaProducer<String, String> newKakfaProducer() {

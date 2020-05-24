@@ -2,42 +2,50 @@ package io.kubesure.aggregate.datatypes;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 
 public class ProspectCompany {
 
-    private String id;
+    private Long id;
     private String companyName;
     private String tradeLicenseNumber;
     private boolean match;
-    private Long timestamp;
+    private DateTime eventTime;
     private List<Prospect> shareHolders;
+    private static transient DateTimeFormatter timeFormatter = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss")
+            .withLocale(Locale.getDefault()).withZoneUTC();
 
-    public ProspectCompany(String id, String companyName, String tradeLicenseNumber, boolean match) {
+    public ProspectCompany(Long id, String companyName, String tradeLicenseNumber, boolean match, DateTime eventTime) {
         shareHolders = new ArrayList<Prospect>();
         this.id = id;
-        this.companyName=companyName;
-        this.tradeLicenseNumber=tradeLicenseNumber;
-        this.match=match;
+        this.companyName = companyName;
+        this.tradeLicenseNumber = tradeLicenseNumber;
+        this.match = match;
+        this.eventTime = eventTime;
     }
 
-    public ProspectCompany(){
+    public DateTime getEventTime() {
+        return eventTime;
+    }
+
+    public void setEventTime(DateTime eventTime) {
+        this.eventTime = eventTime;
+    }
+
+    public ProspectCompany() {
         shareHolders = new ArrayList<Prospect>();
     }
 
-    public String getId() {
+    public long getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(long id) {
         this.id = id;
-    }
-
-    public Long getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(Long timestamp) {
-        this.timestamp = timestamp;
     }
 
     public boolean isMatch() {
@@ -74,6 +82,16 @@ public class ProspectCompany {
     
     public List<Prospect> getShareHolders(){
         return shareHolders;
+    }
+
+    public String toString(){
+        StringBuilder sb = new StringBuilder();
+        sb.append(" Id - ").append(id).
+        append(" Company Name - ").append(companyName).
+        append(" Trade License Number - ").append(tradeLicenseNumber).
+        append(" isMatch - ").append(match).
+        append(" Event data time - ").append(eventTime.toString(timeFormatter));
+        return sb.toString();
     }
     
 }

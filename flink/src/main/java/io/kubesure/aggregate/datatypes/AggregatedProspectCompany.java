@@ -5,27 +5,18 @@ import java.util.List;
 
 public class AggregatedProspectCompany {
 
-    private String id;
+    private Long id;
     private List<ProspectCompany> companies;
-    private Long timestamp;
 
     public AggregatedProspectCompany() {
         this.companies = new ArrayList<ProspectCompany>();
     }
 
-    public Long getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(Long timestamp) {
-        this.timestamp = timestamp;
-    }
-
-    public String getId() {
+    public long getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(long id) {
         this.id = id;
     }
 
@@ -43,5 +34,4 @@ public class AggregatedProspectCompany {
         append(" Results aggregated - ").append(companies.size());
         return sb.toString();
     }
-    
 }
