@@ -1,7 +1,5 @@
 package io.kubesure.aggregate.sources;
 
-import java.util.Calendar;
-
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
 import org.joda.time.DateTime;
 

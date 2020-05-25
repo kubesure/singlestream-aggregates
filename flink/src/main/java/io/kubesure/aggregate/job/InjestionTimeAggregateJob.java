@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import io.kubesure.aggregate.datatypes.AggregatedProspectCompany;
 import io.kubesure.aggregate.datatypes.ProspectCompany;
 import io.kubesure.aggregate.util.Convertor;
+import io.kubesure.aggregate.util.Kafka;
 
 public class InjestionTimeAggregateJob {
 
@@ -30,8 +31,6 @@ public class InjestionTimeAggregateJob {
 
 		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 		env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime);
-		
-
 		
 		// TODO: accept kafka configuration form command line params.
 		Properties propsConsumer = kafkaConsumerProperties();
@@ -94,7 +93,7 @@ public class InjestionTimeAggregateJob {
 				collector.collect(apc);
 			} catch (Exception e) {
 				log.error("Error deserialzing Prospect company", e);
-				producer = newKakfaProducer();
+				producer = Kafka.newKakfaProducer();
 				// TODO: Define new error message payload 
 				producerRec = new ProducerRecord<String,String>
 								   ("ProspectAggregated-dl",e.getMessage());
@@ -127,16 +126,6 @@ public class InjestionTimeAggregateJob {
 			return null;
 		}	
 	}
-
-	private static KafkaProducer<String,String> newKakfaProducer(){
-		Properties properties = new Properties();
-		properties.setProperty("bootstrap.servers", "localhost:9092");
-		properties.setProperty("zookeeper.connect", "localhost:2181");
-		properties.put("key.serializer","org.apache.kafka.common.serialization.StringSerializer");
-		properties.put("value.serializer","org.apache.kafka.common.serialization.StringSerializer");
-		KafkaProducer<String,String> producer = new KafkaProducer<String,String>(properties); 
-		return producer;
-	} 
 
 	private static FlinkKafkaProducer<String> newFlinkKafkaProducer() {
 		// TODO: replace depricated constuctor

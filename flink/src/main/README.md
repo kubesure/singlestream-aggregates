@@ -1,14 +1,20 @@
+## Create topics 
 kafka-topics --create --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --topic AggregateProspect
 
 kafka-topics --create --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --topic ProspectAggregated
 
 kafka-topics --create --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --topic ProspectAggregated-dl
 
+kafka-topics --create --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --topic LateProspectCheck
+
+## To test late records
 kafka-topics --describe --bootstrap-server localhost:9092 --topic ProspectAggregated
 
 kafka-topics --zookeeper localhost:2181 --alter --topic AggregateProspect --config retention.ms=100
 
 kafka-console-producer --broker-list localhost:9092 --topic AggregateProspect
+
+## To test aggregated results, late prospects and prospect DQL  
 
 kafka-console-consumer --bootstrap-server localhost:9092 --topic AggregateProspect
 
@@ -16,47 +22,16 @@ kafka-console-consumer --bootstrap-server localhost:9092 --topic ProspectAggrega
 
 kafka-console-consumer --bootstrap-server localhost:9092 --topic ProspectAggregated-dl
 
-
-{
-    "id": 12345,
-    "companyName": "skyknight",
-    "tradeLicenseNumber": "dd3SrrT",
-    "match": false,
-    "shareHolders": [
-      {
-        "id": 12121,
-        "cif": "cif",
-        "firstName": "Prashant",
-        "lastName": "Patel",
-        "match": false
-      },
-      {
-        "id": 12121,
-        "cif": "cif",
-        "firstName": "Prashant",
-        "lastName": "Patel",
-        "match": false
-      }
-    ]
-}
-
-{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-25 00:12:30","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Prashant","lastName": "Patel","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
+## Late records
+{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-25T00:55:01.258+04:00","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Usha","lastName": "Patel","match": false},{"id": 12121,"cif":"cif","firstName": "Kamya","lastName": "Shah","match": false}]}
 
 {"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-22T15:23:48Z","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Usha","lastName": "Patel","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
 
-{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-22T12:16:49Z","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Kamya","lastName": "Shah","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
+## Test cases 
 
-{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-22T12:16:50Z","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Ritesh","lastName": "Shah","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
+Each prospect match consists of mutiple match sources. The test case are tests against 10 match sources. All match result to complete with in T time in seconds.  
 
-{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-22T12:16:54Z","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Chaitali","lastName": "Shah","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
-
-{"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-22T12:16:60Z","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Mahesh","lastName": "Patel","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
-
-{"id": 67890,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-22T12:16:44Z","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Prashant","lastName": "Patel","match": false},{"id": 12121,"cif":"cif","firstName": "Prashant","lastName": "Patel","match": false}]}
-
-## Test cases - Each prospect match consists of mutiple match sources. The test case are tests against 10 match sources. All match result to complete with in T time in seconds.  
-
-Injestion time cases 
+## Injestion time cases 
 
 1. Send 10 match messages in parallel.
     Outcome - merged messages - sucess 
@@ -72,5 +47,4 @@ Injestion time cases
 5. Test with Paralleism of 2 and check for duplicate messages
 6. Stop kafka after sending events to merge and restart kafka after T+30 seconds 
      outcome...
-     1. prospected aggregated topic to be published with merge message - sucess.  
-7. 
+     1. prospected aggregated topic to be published with merge message - success.  
