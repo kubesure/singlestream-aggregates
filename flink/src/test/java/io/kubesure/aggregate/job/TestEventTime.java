@@ -22,9 +22,9 @@ public class TestEventTime {
             DateTime now = new DateTime(DateTimeZone.getDefault());
             ProspectCompany pc = new ProspectCompany(12345678l, "Skynight Inc", "Trd4534rF", false,now);
             Prospect p = new Prospect(789012l, "Prashant", "Patel", false);
-            pc.addShareHolder(p);
+            pc.addShareHolder(p); 
             String jsonPC = Convertor.convertProspectCompanyToJson(pc);
-            log.info(jsonPC);
+            log.info(jsonPC); 
             KafkaProducer<String,String> producer = Kafka.newKakfaProducer();
             ProducerRecord<String,String> producerRec =
                  new ProducerRecord<String,String>("AggregateProspect", jsonPC);
@@ -33,7 +33,7 @@ public class TestEventTime {
 			}catch(Exception kse){
 				log.error("Error writing message to dead letter Q", kse);
             }
-            Thread.sleep(Time.seconds(20).toMilliseconds());
+            Thread.sleep(Time.seconds(5).toMilliseconds());
         }
     }
 }

@@ -4,7 +4,10 @@ import java.util.Properties;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.Counter;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
@@ -43,55 +46,80 @@ public class EventTimeAggregateJob {
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 		env.getConfig().setAutoWatermarkInterval(500l);
 
-		// TODO: accept kafka configuration form paramtool
-		// TODO: Parse json with custom schema 
+		// TODO: Accept kafka configuration form paramtool
+		// TODO: Parse json with custom schema or implement Arvo schema 
 		Properties propsConsumer = kafkaConsumerProperties();
 		DataStream<ProspectCompany> inputStream = env
-		            .addSource(
-						new FlinkKafkaConsumer<>(
-							"AggregateProspect", 
-							new SimpleStringSchema(), 
-							propsConsumer))
-					.flatMap(new JSONToProspectCompany())
-					.assignTimestampsAndWatermarks
-						(new BoundedOutOfOrdernessTimestampExtractor<ProspectCompany>(Time.seconds(10)) {
-							private static final long serialVersionUID = -686876346234753642L;	
-							@Override
-							public long extractTimestamp(ProspectCompany element) {
-								return element.getEventTime().getMillis();
-							}
+		            	.addSource(
+							new FlinkKafkaConsumer<>(
+								"AggregateProspect", 
+								new SimpleStringSchema(), 
+								propsConsumer))
+						.flatMap(new JSONToProspectCompany())
+						.assignTimestampsAndWatermarks
+							(new BoundedOutOfOrdernessTimestampExtractor<ProspectCompany>(Time.seconds(10)) {
+								private static final long serialVersionUID = -686876346234753642L;	
+								@Override
+								public long extractTimestamp(ProspectCompany element) {
+									return element.getEventTime().getMillis();
+								}
 						}).name("Input");
 						
 		SingleOutputStreamOperator<ProspectCompany> lateProspectFiltered = inputStream
-						.process(new LateProspectFilter());
+							.process(new LateProspectFilter());
 
 		lateProspectFiltered.getSideOutput(lateEvents)
+							.map(new LateProspectCounter())
 							.map(new ProspectCompanyToJSON())
 							.addSink(newFlinkKafkaProducer("LateProspectCheck"))
 							.name("Late prospect sink");
 
 		DataStream<AggregatedProspectCompany> results = lateProspectFiltered
-		        	.keyBy(r -> r.getId())
-					.timeWindow(Time.seconds(30))
-					.process(new AggregateResults()).name("Aggregate");
+	         			.keyBy(r -> r.getId())
+		 					.timeWindow(Time.seconds(30))
+		 					.process(new AggregateResults()).name("Aggregate");
 		
 		results.map(new ResultsToJSON())
-						.addSink(newFlinkKafkaProducer("ProspectAggregated")).name("Results");
-						
+							.addSink(newFlinkKafkaProducer("ProspectAggregated")).name("Results");
+							
 		env.execute("event time aggregation");
 	}
 
+	private static class LateProspectCounter extends RichMapFunction<ProspectCompany,ProspectCompany> {
+
+		private static final long serialVersionUID = -686876771234123442L;
+		private transient Counter counter;
+
+		@Override
+		public void open(Configuration parameters) throws Exception {
+			this.counter = getRuntimeContext()
+						   .getMetricGroup()
+						   .counter("LateProspectCounter");
+		}
+		
+		@Override
+		public ProspectCompany map(ProspectCompany prospectCompany) throws Exception {
+			this.counter.inc();
+			return prospectCompany;
+		}
+	}
+
 	private static class LateProspectFilter extends ProcessFunction<ProspectCompany,ProspectCompany>{
+
 		private static final long serialVersionUID = -686876771234753642L;	
 
 		@Override
 		public void processElement(ProspectCompany prospectCompany,
-								   ProcessFunction<ProspectCompany, 
-								   ProspectCompany>.Context ctx, 
+								   ProcessFunction<ProspectCompany,ProspectCompany>.Context ctx, 
 								   Collector<ProspectCompany> out) throws Exception {
+
+			//log.info("Late  Watermark {}", 
+			//		ctx.timerService().currentWatermark());
+
 			if(prospectCompany.getEventTime().getMillis() < ctx.timerService().currentWatermark()) {
+				//log.info("Late event found - {} ", prospectCompany.getEventTime());
 				ctx.output(lateEvents, prospectCompany);
-			}else {
+			} else {
 				out.collect(prospectCompany);
 			}	
 		}
@@ -103,9 +131,12 @@ public class EventTimeAggregateJob {
 
 		@Override
 		public void process(Long key,
-				ProcessWindowFunction<ProspectCompany, AggregatedProspectCompany, Long, TimeWindow>.Context context,
-				Iterable<ProspectCompany> elements, Collector<AggregatedProspectCompany> out) throws Exception {
-
+				ProcessWindowFunction<ProspectCompany, 
+				AggregatedProspectCompany, Long, TimeWindow>.Context context,
+				Iterable<ProspectCompany> elements,
+				Collector<AggregatedProspectCompany> out) throws Exception {
+						
+				//log.info("Window watermark {}           " , context.currentWatermark());	
 				AggregatedProspectCompany agpc = new AggregatedProspectCompany();
 				for (ProspectCompany pc : elements) {
 					agpc.addCompany(pc);
@@ -132,12 +163,21 @@ public class EventTimeAggregateJob {
 		public long extractTimestamp(ProspectCompany element, long previousElementTimestamp) {
 			long timestamp = element.getEventTime().getMillis();
 			currentMaxTimestamp = Math.max(timestamp, currentMaxTimestamp);
+			//if(element != null) {
+				//log.info("Assigner Watermark {} - {}", 
+				//getCurrentWatermark().getTimestamp(),
+				//element.getEventTime().getMillis());
+			//} 
 			return timestamp;
 		}
 	
 		@Override
 		public Watermark getCurrentWatermark() {
-			return new Watermark(currentMaxTimestamp - maxOutOfOrderness);
+			Watermark wm = new Watermark(currentMaxTimestamp - maxOutOfOrderness);
+			//if (wm.getTimestamp() != -10000) {
+			//	log.info("current watermark {}          ", wm.getTimestamp());	
+			//}
+			return wm;
 		}
 	}
 
@@ -151,15 +191,16 @@ public class EventTimeAggregateJob {
 
 			KafkaProducer<String, String> producer = null;
 			ProducerRecord<String, String> producerRec = null;
+
 			try {
 				ProspectCompany pc = Convertor.convertToProspectCompany(prospectCompany);
 				collector.collect(pc);
 			} catch (Exception e) {
 				log.error("Error deserialzing Prospect company", e);
 				producer = newKakfaProducer();
-				// TODO: Define new error message payload
+				// TODO: Define new error message payload instead of dumping exception message on DQL
 				producerRec = new ProducerRecord<String, String>("ProspectAggregated-dl", e.getMessage());
-				// TODO: Implement a async send
+				// TODO: Implement async send
 				try {
 					producer.send(producerRec).get();
 				} catch (Exception kse) {
@@ -185,6 +226,7 @@ public class EventTimeAggregateJob {
 				// TODO: handle exception post error to dead letter for re-processing.
 				log.error("Error serializing aggregate prospect company", e);
 			}
+			// TODO: Handle null as it breaks pipeline 	
 			return null;
 		}	
 	}
@@ -201,11 +243,13 @@ public class EventTimeAggregateJob {
 				// TODO: handle exception post error to dead letter for re-processing.
 				log.error("Error serializing prospect company", e);
 			}
-			// TODO: Handle null pipeline breaks
+			// TODO: Handle null as it breaks pipeline
 			return null;
 		}	
 	}
 
+	// TODO: Use Paramtool properties
+	@Deprecated   
 	private static KafkaProducer<String, String> newKakfaProducer() {
 		Properties properties = kafkaProperties();
 		properties.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
@@ -214,8 +258,10 @@ public class EventTimeAggregateJob {
 		return producer;
 	}
 
+	
 	private static FlinkKafkaProducer<String> newFlinkKafkaProducer(String topic) {
 		Properties propsProducer = kafkaProperties();
+		// TODO: replace depricated constructor
 		FlinkKafkaProducer<String> kafkaProducer = new FlinkKafkaProducer<String>(
 			    topic,
 				new SimpleStringSchema(),
@@ -230,6 +276,8 @@ public class EventTimeAggregateJob {
 		return propsConsumer;
 	}
 
+	// TODO: Use Paramtool properties
+	@Deprecated
 	private static Properties kafkaProperties() {
 		Properties propsConsumer = new Properties();
 		propsConsumer.setProperty("bootstrap.servers", "localhost:9092");
