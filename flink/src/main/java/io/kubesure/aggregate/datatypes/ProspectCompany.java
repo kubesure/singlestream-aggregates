@@ -2,11 +2,10 @@ package io.kubesure.aggregate.datatypes;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 import org.joda.time.DateTime;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
+
+import io.kubesure.aggregate.util.TimeUtil;
 
 public class ProspectCompany {
 
@@ -16,8 +15,6 @@ public class ProspectCompany {
     private boolean match;
     private DateTime eventTime;
     private List<Prospect> shareHolders;
-    private static transient DateTimeFormatter timeFormatter = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss")
-            .withLocale(Locale.getDefault()).withZoneUTC();
 
     public ProspectCompany(Long id, String companyName, String tradeLicenseNumber, boolean match, DateTime eventTime) {
         shareHolders = new ArrayList<Prospect>();
@@ -90,7 +87,7 @@ public class ProspectCompany {
         append(" Company Name - ").append(companyName).
         append(" Trade License Number - ").append(tradeLicenseNumber).
         append(" isMatch - ").append(match).
-        append(" Event data time - ").append(eventTime.toString(timeFormatter));
+        append(" Event date time - ").append(eventTime.toString(TimeUtil.isoFormatter));
         return sb.toString();
     }
     

@@ -1,7 +1,6 @@
 package io.kubesure.aggregate.util;
 
 import java.lang.reflect.Type;
-import java.util.Locale;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -14,17 +13,12 @@ import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
 
 import org.joda.time.DateTime;
-import org.joda.time.format.DateTimeFormatter;
-import org.joda.time.format.ISODateTimeFormat;
 
 import io.kubesure.aggregate.datatypes.AggregatedProspectCompany;
 import io.kubesure.aggregate.datatypes.Prospect;
 import io.kubesure.aggregate.datatypes.ProspectCompany;
 
 public class Convertor {
-
-    static final DateTimeFormatter timeFormatter = ISODateTimeFormat.dateTime()
-                                                                 .withLocale(Locale.getDefault());
 
     @Deprecated
     public static Prospect convertToProspect(String prospect) throws Exception {
@@ -59,12 +53,12 @@ public class Convertor {
         // No need for an InstanceCreator since DateTime provides a no-args constructor
         @Override
         public JsonElement serialize(DateTime src, Type srcType, JsonSerializationContext context) {
-          return new JsonPrimitive(src.toString(timeFormatter));
+          return new JsonPrimitive(src.toString(TimeUtil.isoFormatter));
         }
         @Override
         public DateTime deserialize(JsonElement json, Type type, JsonDeserializationContext context)
             throws JsonParseException {
-            DateTime eventTime = timeFormatter.parseDateTime(json.getAsString());      
+            DateTime eventTime = TimeUtil.isoFormatter.parseDateTime(json.getAsString());      
             return eventTime;
         }
     }
