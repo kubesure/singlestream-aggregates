@@ -20,7 +20,8 @@ kafka-console-consumer --bootstrap-server localhost:9092 --topic AggregateProspe
 
 kafka-console-consumer --bootstrap-server localhost:9092 --topic ProspectAggregated
 
-kafka-console-consumer --bootstrap-server localhost:9092 --topic ProspectAggregated-dl
+kafka-console-consumer --bootstrap-server localhost:9092 --topic LateProspectCheck
+
 
 ## Late records
 {"id": 12345,"companyName": "skyknight","tradeLicenseNumber": "dd3SrrT","match": false,"eventTime" : "2020-05-25T00:55:01.258+04:00","shareHolders": [{"id": 12121,"cif": "cif","firstName": "Usha","lastName": "Patel","match": false},{"id": 12121,"cif":"cif","firstName": "Kamya","lastName": "Shah","match": false}]}

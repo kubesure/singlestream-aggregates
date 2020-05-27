@@ -24,7 +24,7 @@ public class TestEventTime {
             Prospect p = new Prospect(789012l, "Prashant", "Patel", false);
             pc.addShareHolder(p); 
             String jsonPC = Convertor.convertProspectCompanyToJson(pc);
-            log.info(jsonPC); 
+            log.info(jsonPC);
             KafkaProducer<String,String> producer = Kafka.newKakfaProducer();
             ProducerRecord<String,String> producerRec =
                  new ProducerRecord<String,String>("AggregateProspect", jsonPC);

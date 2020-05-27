@@ -65,7 +65,7 @@ public class EventTimeAggregateJob {
 								}
 						}).name("Input");
 						
-		SingleOutputStreamOperator<ProspectCompany> lateProspectFiltered = inputStream
+		/*SingleOutputStreamOperator<ProspectCompany> lateProspectFiltered = inputStream
 							.process(new LateProspectFilter());
 
 		lateProspectFiltered.getSideOutput(lateEvents)
@@ -81,7 +81,26 @@ public class EventTimeAggregateJob {
 		
 		results.map(new ResultsToJSON())
 							.addSink(newFlinkKafkaProducer("ProspectAggregated")).name("Results");
-							
+		*/
+
+		SingleOutputStreamOperator<AggregatedProspectCompany> results = inputStream
+	         				.keyBy(r -> r.getId())
+							.timeWindow(Time.seconds(30))
+							.sideOutputLateData(lateEvents)
+							.allowedLateness(Time.seconds(5))
+							.process(new AggregateResults())
+							.name("Aggregate");
+							 
+		results.getSideOutput(lateEvents)					 					 
+							.map(new LateProspectCounter())
+							.map(new ProspectCompanyToJSON())
+							.addSink(newFlinkKafkaProducer("LateProspectCheck"))
+							.name("Late prospect sink");
+
+		results.map(new ResultsToJSON())
+							.addSink(newFlinkKafkaProducer("ProspectAggregated"))
+							.name("Results");
+
 		env.execute("event time aggregation");
 	}
 
