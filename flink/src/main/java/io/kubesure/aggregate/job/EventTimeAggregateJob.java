@@ -12,11 +12,8 @@ import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.AssignerWithPeriodicWatermarks;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
-import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
@@ -31,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import io.kubesure.aggregate.datatypes.AggregatedProspectCompany;
 import io.kubesure.aggregate.datatypes.ProspectCompany;
 import io.kubesure.aggregate.util.Convertor;
+import io.kubesure.aggregate.util.TimeUtil;
 
 public class EventTimeAggregateJob {
 
@@ -48,41 +46,23 @@ public class EventTimeAggregateJob {
 
 		// TODO: Accept kafka configuration form paramtool
 		// TODO: Parse json with custom schema or implement Arvo schema 
-		Properties propsConsumer = kafkaConsumerProperties();
 		DataStream<ProspectCompany> inputStream = env
 		            	.addSource(
 							new FlinkKafkaConsumer<>(
 								"AggregateProspect", 
 								new SimpleStringSchema(), 
-								propsConsumer))
+								kafkaConsumerProperties()))
 						.flatMap(new JSONToProspectCompany())
 						.assignTimestampsAndWatermarks
 							(new BoundedOutOfOrdernessTimestampExtractor<ProspectCompany>(Time.seconds(10)) {
 								private static final long serialVersionUID = -686876346234753642L;	
 								@Override
 								public long extractTimestamp(ProspectCompany element) {
+									log.info("New Event Time     - {}", TimeUtil.ISOString(element.getEventTime().getMillis()));
 									return element.getEventTime().getMillis();
 								}
 						}).name("Input");
 						
-		/*SingleOutputStreamOperator<ProspectCompany> lateProspectFiltered = inputStream
-							.process(new LateProspectFilter());
-
-		lateProspectFiltered.getSideOutput(lateEvents)
-							.map(new LateProspectCounter())
-							.map(new ProspectCompanyToJSON())
-							.addSink(newFlinkKafkaProducer("LateProspectCheck"))
-							.name("Late prospect sink");
-
-		DataStream<AggregatedProspectCompany> results = lateProspectFiltered
-	         			.keyBy(r -> r.getId())
-		 					.timeWindow(Time.seconds(30))
-		 					.process(new AggregateResults()).name("Aggregate");
-		
-		results.map(new ResultsToJSON())
-							.addSink(newFlinkKafkaProducer("ProspectAggregated")).name("Results");
-		*/
-
 		SingleOutputStreamOperator<AggregatedProspectCompany> results = inputStream
 	         				.keyBy(r -> r.getId())
 							.timeWindow(Time.seconds(30))
@@ -90,7 +70,8 @@ public class EventTimeAggregateJob {
 							.allowedLateness(Time.seconds(5))
 							.process(new AggregateResults())
 							.name("Aggregate");
-							 
+		
+		results.getSideOutput(lateEvents).print();					
 		results.getSideOutput(lateEvents)					 					 
 							.map(new LateProspectCounter())
 							.map(new ProspectCompanyToJSON())
@@ -123,27 +104,6 @@ public class EventTimeAggregateJob {
 		}
 	}
 
-	private static class LateProspectFilter extends ProcessFunction<ProspectCompany,ProspectCompany>{
-
-		private static final long serialVersionUID = -686876771234753642L;	
-
-		@Override
-		public void processElement(ProspectCompany prospectCompany,
-								   ProcessFunction<ProspectCompany,ProspectCompany>.Context ctx, 
-								   Collector<ProspectCompany> out) throws Exception {
-
-			//log.info("Late  Watermark {}", 
-			//		ctx.timerService().currentWatermark());
-
-			if(prospectCompany.getEventTime().getMillis() < ctx.timerService().currentWatermark()) {
-				//log.info("Late event found - {} ", prospectCompany.getEventTime());
-				ctx.output(lateEvents, prospectCompany);
-			} else {
-				out.collect(prospectCompany);
-			}	
-		}
-	}
-
 	private static class AggregateResults extends ProcessWindowFunction<ProspectCompany,AggregatedProspectCompany,
 																				Long,TimeWindow>{
 		private static final long serialVersionUID = -686876771747690123L;
@@ -155,48 +115,16 @@ public class EventTimeAggregateJob {
 				Iterable<ProspectCompany> elements,
 				Collector<AggregatedProspectCompany> out) throws Exception {
 						
-				//log.info("Window watermark {}           " , context.currentWatermark());	
+				//log.info("Window WMark time  - {}" , TimeUtil.ISOString(context.currentWatermark()));
+				log.info("Window start time  - {}" , TimeUtil.ISOString(context.window().getStart()));
 				AggregatedProspectCompany agpc = new AggregatedProspectCompany();
 				for (ProspectCompany pc : elements) {
+		        log.info("Agg Event time     - {}" , TimeUtil.ISOString(pc.getEventTime().getMillis()));
 					agpc.addCompany(pc);
 					agpc.setId(pc.getId());
-				} 
+				}
+				log.info("Window end time    - {}" , TimeUtil.ISOString(context.window().getEnd())); 
 				out.collect(agpc);		
-		}
-	}
-
-	public static class BoundedOutOfOrdernessGenerator implements 
-	                                            AssignerWithPeriodicWatermarks<ProspectCompany> {
-		private static final long serialVersionUID = -686873471234753642L;	
-
-		private long maxOutOfOrderness = 3500; //default 3.5 seconds 
-		private long currentMaxTimestamp;
-
-		private BoundedOutOfOrdernessGenerator(){};
-
-		private BoundedOutOfOrdernessGenerator(Time time){
-			maxOutOfOrderness = time.toMilliseconds();
-		}
-	
-		@Override
-		public long extractTimestamp(ProspectCompany element, long previousElementTimestamp) {
-			long timestamp = element.getEventTime().getMillis();
-			currentMaxTimestamp = Math.max(timestamp, currentMaxTimestamp);
-			//if(element != null) {
-				//log.info("Assigner Watermark {} - {}", 
-				//getCurrentWatermark().getTimestamp(),
-				//element.getEventTime().getMillis());
-			//} 
-			return timestamp;
-		}
-	
-		@Override
-		public Watermark getCurrentWatermark() {
-			Watermark wm = new Watermark(currentMaxTimestamp - maxOutOfOrderness);
-			//if (wm.getTimestamp() != -10000) {
-			//	log.info("current watermark {}          ", wm.getTimestamp());	
-			//}
-			return wm;
 		}
 	}
 
@@ -276,7 +204,6 @@ public class EventTimeAggregateJob {
 		KafkaProducer<String, String> producer = new KafkaProducer<String, String>(properties);
 		return producer;
 	}
-
 	
 	private static FlinkKafkaProducer<String> newFlinkKafkaProducer(String topic) {
 		Properties propsProducer = kafkaProperties();
