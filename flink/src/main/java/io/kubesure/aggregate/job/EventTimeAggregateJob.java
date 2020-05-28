@@ -1,5 +1,6 @@
 package io.kubesure.aggregate.job;
 
+import java.util.Comparator;
 import java.util.Properties;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
@@ -117,12 +118,18 @@ public class EventTimeAggregateJob {
 						
 				//log.info("Window WMark time  - {}" , TimeUtil.ISOString(context.currentWatermark()));
 				log.info("Window start time  - {}" , TimeUtil.ISOString(context.window().getStart()));
+
 				AggregatedProspectCompany agpc = new AggregatedProspectCompany();
 				for (ProspectCompany pc : elements) {
-		        log.info("Agg Event time     - {}" , TimeUtil.ISOString(pc.getEventTime().getMillis()));
+		        	//log.info("Agg Event time     - {}" , TimeUtil.ISOString(pc.getEventTime().getMillis()));
 					agpc.addCompany(pc);
 					agpc.setId(pc.getId());
 				}
+				agpc.gProspectCompanies().sort(Comparator.comparing(ProspectCompany::getEventTime));
+				for (ProspectCompany pc1 : agpc.gProspectCompanies()) {
+					log.info("Agg Event time     - {}" , TimeUtil.ISOString(pc1.getEventTime().getMillis()));
+				}
+
 				log.info("Window end time    - {}" , TimeUtil.ISOString(context.window().getEnd())); 
 				out.collect(agpc);		
 		}

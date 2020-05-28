@@ -15,14 +15,15 @@ import io.kubesure.aggregate.datatypes.Prospect;
 import io.kubesure.aggregate.datatypes.ProspectCompany;
 import io.kubesure.aggregate.util.Convertor;
 import io.kubesure.aggregate.util.Kafka;
+import io.kubesure.aggregate.util.TimeUtil;
 
 public class TestEventTime {
 
     private static final Logger log = LoggerFactory.getLogger(TestEventTime.class);
     
     public static void main(String args[]) throws Exception {
-        //testSequentialEventsWithCount(Time.seconds(2),10);  
-        testOOOEvents(Time.seconds(2),35);
+        testSequentialEvents(Time.seconds(2),10); 
+        //testOOOEvents(Time.seconds(2),3);
     }
 
     private static void testSequentialEvents(Time withDelay) throws Exception {
@@ -33,6 +34,7 @@ public class TestEventTime {
     }
 
     private static void testOOOEvents(Time withDelay, int count) throws Exception {
+        log.info("Start of test - {}", TimeUtil.ISOString(new DateTime().getMillis()));
         List<String> lateEvents = new ArrayList<String>(); 
         for (int i = 0; i < count; i++) {
             if (i / 2 == 0) {
@@ -49,9 +51,10 @@ public class TestEventTime {
             send(lateEvent);
             Thread.sleep(Time.seconds(2).toMilliseconds());    
         }
+        log.info("End of test - {}", TimeUtil.ISOString(new DateTime().getMillis()));
     }
 
-    private static void testSequentialEventsWithCount(Time withDelay, int count) throws Exception {
+    private static void testSequentialEvents(Time withDelay, int count) throws Exception {
         for (int i = 0; i < count; i++) {
             send(payLoad1());
             Thread.sleep(withDelay.toMilliseconds());

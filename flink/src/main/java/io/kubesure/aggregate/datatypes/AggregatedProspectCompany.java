@@ -28,6 +28,10 @@ public class AggregatedProspectCompany {
         return companies.get(0);
     }
 
+    public List<ProspectCompany> gProspectCompanies(){
+        return companies;
+    }
+
     public String toString(){
         StringBuilder sb = new StringBuilder();
         sb.append("Prospect ID- ").append(id).
