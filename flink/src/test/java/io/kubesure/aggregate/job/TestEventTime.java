@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import io.kubesure.aggregate.datatypes.Prospect;
 import io.kubesure.aggregate.datatypes.ProspectCompany;
 import io.kubesure.aggregate.util.Convertor;
-import io.kubesure.aggregate.util.Kafka;
+import io.kubesure.aggregate.util.Util;
 import io.kubesure.aggregate.util.TimeUtil;
 
 public class TestEventTime {
@@ -22,29 +22,29 @@ public class TestEventTime {
     private static final Logger log = LoggerFactory.getLogger(TestEventTime.class);
     
     public static void main(String args[]) throws Exception {
-        testSequentialEvents(Time.seconds(2),10); 
-        //testOOOEvents(Time.seconds(2),3);
+        testSequentialEvents(Time.seconds(5),60); 
+        ///testOOOEvents(Time.seconds(2),10,Time.minutes(3)); 
     }
 
     private static void testSequentialEvents(Time withDelay) throws Exception {
         while (true) {
-            send(payLoad1());
+            send(payLoad1()); 
             Thread.sleep(withDelay.toMilliseconds());
         }
     }
 
-    private static void testOOOEvents(Time withDelay, int count) throws Exception {
+    private static void testOOOEvents(Time withDelay, int count, Time withLateDelay) throws Exception {
         log.info("Start of test - {}", TimeUtil.ISOString(new DateTime().getMillis()));
         List<String> lateEvents = new ArrayList<String>(); 
         for (int i = 0; i < count; i++) {
-            if (i / 2 == 0) {
+            if (i / 2 != 0) {
                 lateEvents.add(payLoad1());
             } else {
                 send(payLoad1());
             }
             Thread.sleep(withDelay.toMilliseconds());
         }
-        Thread.sleep(Time.seconds(5).toMilliseconds());
+        Thread.sleep(withLateDelay.toMilliseconds());
         for (String lateEvent : lateEvents) {
             log.info("-----------------lateEvent----------------------");
             log.info(lateEvent);
@@ -74,7 +74,7 @@ public class TestEventTime {
     private static String payLoad2() throws Exception {
         DateTime now = new DateTime(DateTimeZone.getDefault());
         ProspectCompany pc = new ProspectCompany(9876543l, "Karsandas & sons", "Trd4534rF", false,now);
-        Prospect p = new Prospect(8743l, "Usha", "Patel", false);
+        Prospect p = new Prospect(8743l, "U", "Patel", false);
         pc.addShareHolder(p); 
         String jsonPC = Convertor.convertProspectCompanyToJson(pc);
         log.info(jsonPC);
@@ -82,7 +82,7 @@ public class TestEventTime {
     }
 
     private static void send(String payload) throws Exception {
-        KafkaProducer<String,String> producer = Kafka.newKakfaProducer();
+        KafkaProducer<String,String> producer = Util.newKakfaProducer();
         ProducerRecord<String,String> producerRec =
              new ProducerRecord<String,String>("AggregateProspect", payload);
         try {

@@ -1,11 +1,10 @@
 package io.kubesure.aggregate.job;
 
-import java.util.Properties;
-
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
+import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -21,51 +20,54 @@ import org.slf4j.LoggerFactory;
 import io.kubesure.aggregate.datatypes.AggregatedProspectCompany;
 import io.kubesure.aggregate.datatypes.ProspectCompany;
 import io.kubesure.aggregate.util.Convertor;
-import io.kubesure.aggregate.util.Kafka;
+import io.kubesure.aggregate.util.KafkaUtil;
+import io.kubesure.aggregate.util.Util;
 
 public class InjestionTimeAggregateJob {
 
 	private static final Logger log = LoggerFactory.getLogger(InjestionTimeAggregateJob.class);
+	private static ParameterTool parameterTool;
 
 	public static void main(String[] args) throws Exception {
 
-		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+		parameterTool = Util.readProperties();
+		StreamExecutionEnvironment env = Util.prepareExecutionEnv(parameterTool);
 		env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime);
 		
-		// TODO: accept kafka configuration form command line params.
-		Properties propsConsumer = kafkaConsumerProperties();
-		DataStream<String> kafkaProspectStream = env.addSource(
-													new FlinkKafkaConsumer<>(
-														"AggregateProspect", 
-														new SimpleStringSchema(), 
-														propsConsumer),
-														"Kafka-prospect-stream-source");	
+		// TODO: accept kafka configuration form command line params
+		DataStream<String> kafkaProspectStream = env
+						.addSource(
+							new FlinkKafkaConsumer<>(
+							parameterTool.getRequired("kafka.input.topic"),  
+							new SimpleStringSchema(), 
+							parameterTool.getProperties()))
+						.name("Input");	
 		
 		DataStream<AggregatedProspectCompany> prospectStream =	kafkaProspectStream
-		.flatMap(new FlatMapToAggreateProspectCompany());
+						.flatMap(new AggreateProspectCompany())
+						.name("Flat map to prospect company");
 
 		DataStream<AggregatedProspectCompany> keyedPCStreams = prospectStream
-		.keyBy(r -> r.getId())
-		.timeWindow(Time.minutes(3))
-		.reduce(new AggregatedProspectCompanyReduce());
+						.keyBy(r -> r.getId())
+						.timeWindow(Time.seconds
+							(Integer.parseInt(parameterTool.getRequired("window.time.seconds"))))
+						.reduce(new ProspectCompanyReduce())
+						.name("Aggregate");
 
-		keyedPCStreams.print();
-
-		DataStream<String> aggregatedStream = keyedPCStreams.map(new MapAggregatedProspectToString());
+		DataStream<String> aggregatedStream = keyedPCStreams
+						.map(new AggregatedProspectToString())
+						.name("Prospect to JSON");
 		
-		aggregatedStream.print();
+		FlinkKafkaProducer<String> kafkaProducer = KafkaUtil.newFlinkKafkaProducer
+												   (parameterTool.getRequired("kafka.sink.results.topic"),
+												   parameterTool);
+		aggregatedStream.addSink(kafkaProducer)
+						.name("To kafka sink");	
 
-		try {
-			FlinkKafkaProducer<String> kafkaProducer = newFlinkKafkaProducer();
-			aggregatedStream.addSink(kafkaProducer);	
-		} catch (Exception kpe) {
-			log.error("Error sending message to sink topic", kpe);
-		}
 		env.execute("injestion time aggregation");
-		
 	}
 
-	private static class AggregatedProspectCompanyReduce implements ReduceFunction<AggregatedProspectCompany> {
+	private static class ProspectCompanyReduce implements ReduceFunction<AggregatedProspectCompany> {
 
 		private static final long serialVersionUID = -686876771747650202L;
 
@@ -76,7 +78,7 @@ public class InjestionTimeAggregateJob {
 		}
 	}
 
-	private static class FlatMapToAggreateProspectCompany implements FlatMapFunction<String, AggregatedProspectCompany> {
+	private static class AggreateProspectCompany implements FlatMapFunction<String, AggregatedProspectCompany> {
 
 		private static final long serialVersionUID = -686876771747690202L;
 
@@ -93,10 +95,11 @@ public class InjestionTimeAggregateJob {
 				collector.collect(apc);
 			} catch (Exception e) {
 				log.error("Error deserialzing Prospect company", e);
-				producer = Kafka.newKakfaProducer();
+				producer = Util.newKakfaProducer();
 				// TODO: Define new error message payload 
 				producerRec = new ProducerRecord<String,String>
-								   ("ProspectAggregated-dl",e.getMessage());
+								   (parameterTool.getRequired("kafka.DQL.topic"),
+								    e.getMessage());
 				// TODO: Implement a async send
 				try {
 					producer.send(producerRec).get();
@@ -111,7 +114,7 @@ public class InjestionTimeAggregateJob {
 		}
 	}
 
-	private static class MapAggregatedProspectToString implements MapFunction<AggregatedProspectCompany, String> {
+	private static class AggregatedProspectToString implements MapFunction<AggregatedProspectCompany, String> {
 
 		private static final long serialVersionUID = -686876771747614202L;
 
@@ -120,30 +123,10 @@ public class InjestionTimeAggregateJob {
 			try {
 				return Convertor.convertAggregatedProspectCompanyToJson(agpc);
 			} catch (Exception e) {
-				// TODO: handle exception post error to dead letter for re-processing.
+				// TODO: handle exception post error to dead letter for re-processing
 				log.error("Error serialzing aggregate prospect company", e);
 			}
 			return null;
 		}	
-	}
-
-	private static FlinkKafkaProducer<String> newFlinkKafkaProducer() {
-		// TODO: replace depricated constuctor
-		Properties propsProducer = new Properties();
-		propsProducer.setProperty("bootstrap.servers", "localhost:9092");
-		propsProducer.setProperty("zookeeper.connect", "localhost:2181");   
-		FlinkKafkaProducer<String> kafkaProducer = new FlinkKafkaProducer<String>(
-					"ProspectAggregated", new SimpleStringSchema(),propsProducer
-		);
-		kafkaProducer.setWriteTimestampToKafka(true);
-		return kafkaProducer;
-	}
-
-	private static Properties kafkaConsumerProperties() {
-		Properties propsConsumer = new Properties();
-		propsConsumer.setProperty("bootstrap.servers", "localhost:9092");
-		propsConsumer.setProperty("zookeeper.connect", "localhost:2181");
-		propsConsumer.setProperty("group.id", "aggregateprospectgrp");
-		return propsConsumer;
-	}
+	}	
 }
