@@ -23,6 +23,18 @@ import io.kubesure.aggregate.util.Convertor;
 import io.kubesure.aggregate.util.KafkaUtil;
 import io.kubesure.aggregate.util.Util;
 
+
+/**
+ * @author Prashant Patel
+ * InjestionTimeAggregateJob aggregates matches on Injestion time. Match provider publishes prospect
+ * match event to topic kafka.input.topic, with isMatch attribute indicating match(a.k.a hit). 
+ * Matches are aggregated/reduced on prospect Id as a key allowing concurrent aggregation of 
+ * prospects. This job aggregates on fixed window time of window.time.seconds. 
+ * late event and out of order events are not handled. Invalid matchs due to bad formed 
+ * event message are delivered to kafka.DQL.topic for re-processing. Match events are aggregated 
+ * and results published to kafka.sink.results.topic for consumer applications.         
+ */
+
 public class InjestionTimeAggregateJob {
 
 	private static final Logger log = LoggerFactory.getLogger(InjestionTimeAggregateJob.class);
@@ -35,6 +47,7 @@ public class InjestionTimeAggregateJob {
 		env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime);
 		
 		// TODO: accept kafka configuration form command line params
+		// Pulls message from kafka.input.topic maps to ProspectCompany
 		DataStream<String> kafkaProspectStream = env
 						.addSource(
 							new FlinkKafkaConsumer<>(
@@ -43,10 +56,13 @@ public class InjestionTimeAggregateJob {
 							parameterTool.getProperties()))
 						.name("Input");	
 		
+		// Consumed events are parsed to ProspectCompany for aggregation 				
 		DataStream<AggregatedProspectCompany> prospectStream =	kafkaProspectStream
 						.flatMap(new AggreateProspectCompany())
 						.name("Flat map to prospect company");
 
+		// ProspectCompany's are keyed by id and reduced to resuts over a time period of
+		//window.time.seconds. Late events are keyed and aggregated without late processing.  
 		DataStream<AggregatedProspectCompany> keyedPCStreams = prospectStream
 						.keyBy(r -> r.getId())
 						.timeWindow(Time.seconds
@@ -54,19 +70,22 @@ public class InjestionTimeAggregateJob {
 						.reduce(new ProspectCompanyReduce())
 						.name("Aggregate");
 
+		//Aggregated events are serialzied to JSON for sink push
 		DataStream<String> aggregatedStream = keyedPCStreams
 						.map(new AggregatedProspectToString())
 						.name("Prospect to JSON");
 		
+		//Results are push to kafka skin kafka.sink.results.topic 				
 		FlinkKafkaProducer<String> kafkaProducer = KafkaUtil.newFlinkKafkaProducer
 												   (parameterTool.getRequired("kafka.sink.results.topic"),
-												   parameterTool);
+												    parameterTool);
 		aggregatedStream.addSink(kafkaProducer)
 						.name("To kafka sink");	
 
 		env.execute("injestion time aggregation");
 	}
 
+	//Reduces match to matches
 	private static class ProspectCompanyReduce implements ReduceFunction<AggregatedProspectCompany> {
 
 		private static final long serialVersionUID = -686876771747650202L;
@@ -78,6 +97,7 @@ public class InjestionTimeAggregateJob {
 		}
 	}
 
+	//Serializes to AggregatedProspectCompany for reduction
 	private static class AggreateProspectCompany implements FlatMapFunction<String, AggregatedProspectCompany> {
 
 		private static final long serialVersionUID = -686876771747690202L;
@@ -114,6 +134,7 @@ public class InjestionTimeAggregateJob {
 		}
 	}
 
+	//Serialize to JSON for Kafka sink 
 	private static class AggregatedProspectToString implements MapFunction<AggregatedProspectCompany, String> {
 
 		private static final long serialVersionUID = -686876771747614202L;

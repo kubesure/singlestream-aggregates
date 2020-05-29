@@ -32,6 +32,19 @@ import io.kubesure.aggregate.util.KafkaUtil;
 import io.kubesure.aggregate.util.TimeUtil;
 import io.kubesure.aggregate.util.Util;
 
+
+/**
+ * @author Prashant Patel
+ * EventTimeAggregateJob aggregates prospect matches on event time . Match provider publishes prospect
+ * match event to topic kafka.input.topic, with isMatch attribute indicating match(a.k.a hit). 
+ * Matches are aggregated on prospect Id as a key allowing concurrent aggregation of prospects.
+ * This job is event time pipleline and produces late prospects which were delayed by 
+ * window.time.seconds + window.time.lateness. Late prospects are pushed to topic 
+ * kafka.sink.lateevents.topic and lateness counter is incremented and dashboard updated. 
+ * Invalid matchs due to bad formed event message are delivered to kafka.DQL.topic for 
+ * re-processing. Matche events are aggregated and results published to kafka.sink.results.topic 
+ * for consumer applications.         
+ */
 public class EventTimeAggregateJob {
 
 	private static final Logger log = LoggerFactory.getLogger(EventTimeAggregateJob.class);
@@ -47,7 +60,9 @@ public class EventTimeAggregateJob {
 		StreamExecutionEnvironment env = Util.prepareExecutionEnv(parameterTool);
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-		// TODO: Parse json with custom schema or implement Arvo schema 
+		// TODO: Parse json with custom schema or implement Arvo schema
+		// Pulls message from kafka.input.topic maps to ProspectCompany and watermarks 
+		// are generated with a delay of 10 second over event time stamp.    
 		DataStream<ProspectCompany> inputStream = env
 		            	.addSource(
 							new FlinkKafkaConsumer<>(
@@ -65,6 +80,8 @@ public class EventTimeAggregateJob {
 								}
 						}).name("Input");
 
+		// Watermarked events are keyed by prospect id and aggregated within window.time.seconds and lateness of window.time.lateness
+		// total lateness is window.time.lateness + 10 seconds 				
 		SingleOutputStreamOperator<AggregatedProspectCompany> results = inputStream
 	         				.keyBy(r -> r.getId())
 							.timeWindow(Time.seconds
@@ -79,6 +96,7 @@ public class EventTimeAggregateJob {
 			results.getSideOutput(lateEvents).print();
 		}
 
+		// Late events are delivered to kafka.sink.lateevents.topic  
 		results.getSideOutput(lateEvents)					 					 
 							.map(new LateProspectCounter())
 							.map(new ProspectCompanyToJSON())
@@ -87,6 +105,7 @@ public class EventTimeAggregateJob {
 							 					 parameterTool))
 							.name("Late prospect sink");
 	
+		// Aggregated results with window.time.seconds are delivered to kafka sink
 		results.map(new ResultsToJSON())
 							.addSink(KafkaUtil.newFlinkKafkaProducer
 												(parameterTool.getRequired("kafka.sink.results.topic"),
@@ -96,6 +115,9 @@ public class EventTimeAggregateJob {
 		env.execute("event time aggregation");
 	}
 
+	/**
+	 * Late prospect dashboard counter is incremented by 1 on encountering a late event 
+	 */
 	private static class LateProspectCounter extends RichMapFunction<ProspectCompany,ProspectCompany> {
 
 		private static final long serialVersionUID = -686876771234123442L;
@@ -115,6 +137,9 @@ public class EventTimeAggregateJob {
 		}
 	}
 
+	/**
+	 * On window end time prospect are aggregated and sorted for sink operator to process  
+	 */
 	private static class AggregateResults extends ProcessWindowFunction<ProspectCompany,AggregatedProspectCompany,
 																				Long,TimeWindow>{
 		private static final long serialVersionUID = -686876771747690123L;
@@ -150,6 +175,7 @@ public class EventTimeAggregateJob {
 		}
 	}
 
+	//Converts each prosepct in the pipleline from JSON to ProspectCompany POJO
 	private static class JSONToProspectCompany
 									implements FlatMapFunction<String, ProspectCompany> {
 
@@ -185,6 +211,7 @@ public class EventTimeAggregateJob {
 		}
 	}
 
+	// Converts aggregated matches to JSON for sink processing
 	private static class ResultsToJSON implements MapFunction<AggregatedProspectCompany,String> {
 
 		private static final long serialVersionUID = -686876771747614202L;
@@ -202,6 +229,7 @@ public class EventTimeAggregateJob {
 		}	
 	}
 
+	//Converts late prospects to JSON for LateProspect sink 
 	private static class ProspectCompanyToJSON implements MapFunction<ProspectCompany,String> {
 
 		private static final long serialVersionUID = -686876771747614202L;
