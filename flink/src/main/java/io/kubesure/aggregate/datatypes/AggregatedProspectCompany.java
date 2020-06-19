@@ -28,8 +28,12 @@ public class AggregatedProspectCompany {
         return companies.get(0);
     }
 
-    public List<ProspectCompany> gProspectCompanies(){
+    public List<ProspectCompany> getProspectCompanies(){
         return companies;
+    }
+
+    public void setProspectCompanies(List<ProspectCompany> prospectCompanies){
+        this.companies = prospectCompanies;
     }
 
     public String toString(){
