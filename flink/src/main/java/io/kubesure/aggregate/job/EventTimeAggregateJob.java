@@ -1,6 +1,8 @@
 package io.kubesure.aggregate.job;
 
 import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.MapFunction;
@@ -78,19 +80,19 @@ public class EventTimeAggregateJob {
 									log.info("New Event Time     - {}", TimeUtil.ISOString(element.getEventTime().getMillis()));
 									return element.getEventTime().getMillis();
 								}
-						}).name("Input");
+						}).uid("Input");
 
 		// Watermarked events are keyed by prospect id and aggregated within window.time.seconds and lateness of window.time.lateness
 		// total lateness is window.time.lateness + 10 seconds 				
 		SingleOutputStreamOperator<AggregatedProspectCompany> results = inputStream
 	         				.keyBy(r -> r.getId())
 							.timeWindow(Time.seconds
-							                   (Integer.parseInt(parameterTool.getRequired("window.time.seconds"))))
+							            (Integer.parseInt(parameterTool.getRequired("window.time.seconds"))))
 							.sideOutputLateData(lateEvents)
 							.allowedLateness(Time.seconds
-							                   (Integer.parseInt(parameterTool.getRequired("window.time.lateness"))))
+							            (Integer.parseInt(parameterTool.getRequired("window.time.lateness"))))
 							.process(new AggregateResults())
-							.name("Aggregate");
+							.uid("AggregateProspects");
 
 		if(log.isInfoEnabled()) {
 			results.getSideOutput(lateEvents).print();
@@ -101,16 +103,22 @@ public class EventTimeAggregateJob {
 							.map(new LateProspectCounter())
 							.map(new ProspectCompanyToJSON())
 							.addSink(KafkaUtil.newFlinkKafkaProducer
-												(parameterTool.getRequired("kafka.sink.lateevents.topic"),
-							 					 parameterTool))
-							.name("Late prospect sink");
-	
+									(parameterTool.getRequired("kafka.sink.lateevents.topic"),
+							 		parameterTool))
+							.uid("LateProspetcSink");
+
+		if(log.isInfoEnabled()) {
+			results.print();
+		}
+		
 		// Aggregated results with window.time.seconds are delivered to kafka sink
 		results.map(new ResultsToJSON())
 							.addSink(KafkaUtil.newFlinkKafkaProducer
-												(parameterTool.getRequired("kafka.sink.results.topic"),
-							  					 parameterTool))
-							.name("Results");
+									(parameterTool.getRequired("kafka.sink.results.topic"),
+							  		 parameterTool))
+							.uid("Results");
+
+							
 
 		env.execute("event time aggregation");
 	}
@@ -162,10 +170,20 @@ public class EventTimeAggregateJob {
 					agpc.addCompany(pc);
 					agpc.setId(pc.getId());
 				}
-				agpc.gProspectCompanies().sort(Comparator.comparing(ProspectCompany::getEventTime));
+
+				//remove duplicate elements generated for late events arrived between
+				//window.time.seconds and window.time.lateness 
+				List<ProspectCompany> distinctProspectCo = agpc.getProspectCompanies()
+				 									           .stream()
+													           .distinct()
+													           .collect(Collectors.toList());
+				agpc.setProspectCompanies(distinctProspectCo);									   
+
+				//Sort out of order event by event time 
+				agpc.getProspectCompanies().sort(Comparator.comparing(ProspectCompany::getEventTime));
 
 				if(log.isInfoEnabled()){
-					for (ProspectCompany pc1 : agpc.gProspectCompanies()) {
+					for (ProspectCompany pc1 : agpc.getProspectCompanies()) {
 						log.info("Agg Event time     - {}" , TimeUtil.ISOString(pc1.getEventTime().getMillis()));
 					}
 					log.info("Window end time    - {}" , TimeUtil.ISOString(context.window().getEnd())); 
