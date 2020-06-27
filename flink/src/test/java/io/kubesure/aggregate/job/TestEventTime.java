@@ -22,7 +22,7 @@ public class TestEventTime {
     private static final Logger log = LoggerFactory.getLogger(TestEventTime.class);
     
     public static void main(String args[]) throws Exception {
-        testSequentialEvents(Time.seconds(5),60); 
+        testSequentialEvents(Time.seconds(2),60); 
         //testOOOEvents(Time.seconds(2),10,Time.minutes(3)); 
     }
 

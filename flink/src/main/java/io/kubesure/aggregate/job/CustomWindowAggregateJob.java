@@ -7,6 +7,8 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.util.OutputTag;
@@ -15,6 +17,7 @@ import org.slf4j.LoggerFactory;
 
 import io.kubesure.aggregate.datatypes.AggregatedProspectCompany;
 import io.kubesure.aggregate.datatypes.ProspectCompany;
+import io.kubesure.aggregate.datatypes.TimeType;
 import io.kubesure.aggregate.util.KafkaUtil;
 import io.kubesure.aggregate.util.TimeUtil;
 import io.kubesure.aggregate.util.Util;
@@ -32,7 +35,7 @@ import io.kubesure.aggregate.util.Util;
  * re-processing. Matche events are aggregated and results published to kafka.sink.results.topic 
  * for consumer applications.         
  */
-public class EventTimeAggregateJob {
+public class CustomWindowAggregateJob {
 
 	private static final Logger log = LoggerFactory.getLogger(EventTimeAggregateJob.class);
 	
@@ -71,11 +74,8 @@ public class EventTimeAggregateJob {
 		// total lateness is window.time.lateness + 10 seconds 				
 		SingleOutputStreamOperator<AggregatedProspectCompany> results = inputStream
 	         				.keyBy(r -> r.getId())
-							.timeWindow(Time.seconds
-							            (parameterTool.getLong("window.time.seconds")))
-							.sideOutputLateData(lateEvents)
-							.allowedLateness(Time.seconds
-							            (parameterTool.getLong("window.time.lateness")))
+							.window(new CustomWindow(TimeType.PROCESSING))
+							.trigger(new EarlyLateFireTrigger(TimeType.PROCESSING))
 							.process(new AggregateResults())
 							.uid("AggregateProspects");
 
