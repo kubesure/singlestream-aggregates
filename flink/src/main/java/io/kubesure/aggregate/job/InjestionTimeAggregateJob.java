@@ -3,7 +3,6 @@ package io.kubesure.aggregate.job;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
-import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -11,6 +10,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer;
+import org.apache.flink.streaming.util.serialization.SimpleStringSchema;
 import org.apache.flink.util.Collector;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -45,19 +45,23 @@ public class InjestionTimeAggregateJob {
 		parameterTool = Util.readProperties();
 		StreamExecutionEnvironment env = Util.prepareExecutionEnv(parameterTool);
 		env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime);
-		
-		// TODO: accept kafka configuration form command line params
+
+		// uncomment for unit testing. Tests only for one prospect company matches
+		//DataStream<String> input = env.addSource(new ProspectCompanySource(1,101,2000l));
+
+		// Comment for unit testing
 		// Pulls message from kafka.input.topic maps to ProspectCompany
-		DataStream<String> kafkaProspectStream = env
+		// TODO: Implement Avro  
+		DataStream<String> input = env
 						.addSource(
 							new FlinkKafkaConsumer<>(
 							parameterTool.getRequired("kafka.input.topic"),  
 							new SimpleStringSchema(), 
 							parameterTool.getProperties()))
 						.uid("Input");	
-		
+						
 		// Consumed events are parsed to ProspectCompany for aggregation 				
-		DataStream<AggregatedProspectCompany> prospectStream =	kafkaProspectStream
+		DataStream<AggregatedProspectCompany> prospectStream =	input
 						.flatMap(new AggreateProspectCompany())
 						.uid("FlatMapToProspectCompany");
 
@@ -78,7 +82,9 @@ public class InjestionTimeAggregateJob {
 		//Results are push to kafka skin kafka.sink.results.topic 				
 		FlinkKafkaProducer<String> kafkaProducer = KafkaUtil.newFlinkKafkaProducer
 												   (parameterTool.getRequired("kafka.sink.results.topic"),
-												    parameterTool);
+													parameterTool);
+													
+		aggregatedStream.print();											
 		aggregatedStream.addSink(kafkaProducer)
 						.uid("ToKafkaSink");	
 

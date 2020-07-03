@@ -1,0 +1,50 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "CodeLens (Launch) - CustomWindowAggregateJob",
+            "request": "launch",
+            "mainClass": "io.kubesure.aggregate.job.CustomWindowAggregateJob",
+            "projectName": "singlestream-aggregates"
+        },
+        {
+            "type": "java",
+            "name": "CodeLens (Launch) - EventTimeAggregateJob",
+            "request": "launch",
+            "mainClass": "io.kubesure.aggregate.job.EventTimeAggregateJob",
+            "projectName": "singlestream-aggregates"
+        },
+        {
+            "type": "java",
+            "name": "CodeLens (Launch) - TestEventTime",
+            "request": "launch",
+            "mainClass": "io.kubesure.aggregate.job.TestEventTime",
+            "projectName": "singlestream-aggregates"
+        },
+        {
+            "type": "java",
+            "name": "CodeLens (Launch) - InjestionTimeAggregateJob",
+            "request": "launch",
+            "mainClass": "io.kubesure.aggregate.job.InjestionTimeAggregateJob",
+            "projectName": "singlestream-aggregates"
+        },
+        {
+            "type": "java",
+            "name": "Debug (Launch) - Current File",
+            "request": "launch",
+            "mainClass": "${file}"
+        },
+        {
+            "type": "java",
+            "name": "Debug (Launch)-TestProspectMatches<singlestream-aggregates>",
+            "request": "launch",
+            "mainClass": "io.kubesure.aggregate.job.TestProspectMatches",
+            "projectName": "singlestream-aggregates",
+            "args": "1"
+        }
+    ]
+}

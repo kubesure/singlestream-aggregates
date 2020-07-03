@@ -1,5 +1,5 @@
 package io.kubesure.aggregate.job;
 
-public class TestCustomerWindow {
+public class TestCustomWindow {
     
 }
