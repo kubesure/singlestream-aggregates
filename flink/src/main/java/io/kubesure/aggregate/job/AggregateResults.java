@@ -54,7 +54,7 @@ class AggregateResults extends ProcessWindowFunction<ProspectCompany, Aggregated
 
 				if(log.isInfoEnabled()){
 					for (ProspectCompany pc1 : agpc.getProspectCompanies()) {
-						log.info("Agg Event time     - {}" , TimeUtil.ISOString(pc1.getEventTime().getMillis()));
+						log.info("Agg Event time     - {}" , TimeUtil.ISOString(pc1.getEventTime()));
 					}
 					log.info("Window end time    - {}" , TimeUtil.ISOString(context.window().getEnd())); 
 				}

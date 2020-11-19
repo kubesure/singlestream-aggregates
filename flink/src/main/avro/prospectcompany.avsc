@@ -1,0 +1,33 @@
+{
+ "type": "record",   
+ "name": "ProspectCompany",
+ "namespace": "io.kubesure.aggregate.datatypes",
+ "doc": "Prospect company with registered prospect as shareholders",
+ "fields": [
+    {"name": "id", "type": "long"},
+    {"name": "companyName",  "type": "string"},
+    {"name": "tradeLicenseNumber",  "type": "string"},
+    {"name": "match",  "type": "boolean"},
+    {"name": "eventTime",  "type": "long","logicalType": "local-timestamp-millis"},
+    {
+        "name": "shareHolders",
+        "type": {
+            "type": "array",
+            "items":{
+                "type": "record",
+                "name": "Prospect",
+                "namespace": "io.kubesure.aggregate.datatypes",
+                "fields": [
+                    {"name": "id", "type": "long"},
+                    {"name": "cif", "type": "string"},
+                    {"name": "account", "type": "string"},
+                    {"name": "firstName", "type": "string"},
+                    {"name": "lastName", "type": "string"},
+                    {"name": "fullName", "type": "string"},
+                    {"name": "match", "type": "boolean"}
+                ]
+            }
+        }
+    }
+ ]
+}

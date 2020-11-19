@@ -1,7 +1,5 @@
 package io.kubesure.aggregate.job;
 
-import javax.print.DocFlavor.INPUT_STREAM;
-
 public class TestProspectMatches {
 
     public static void main(String args[]) {

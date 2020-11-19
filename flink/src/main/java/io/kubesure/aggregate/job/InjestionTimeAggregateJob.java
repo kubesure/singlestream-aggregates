@@ -4,13 +4,13 @@ import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.formats.avro.registry.confluent.ConfluentRegistryAvroDeserializationSchema;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer;
-import org.apache.flink.streaming.util.serialization.SimpleStringSchema;
 import org.apache.flink.util.Collector;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -52,13 +52,23 @@ public class InjestionTimeAggregateJob {
 		// Comment for unit testing
 		// Pulls message from kafka.input.topic maps to ProspectCompany
 		// TODO: Implement Avro  
-		DataStream<String> input = env
+		/*DataStream<String> input = env
 						.addSource(
 							new FlinkKafkaConsumer<>(
 							parameterTool.getRequired("kafka.input.topic"),  
 							new SimpleStringSchema(), 
 							parameterTool.getProperties()))
-						.uid("Input");	
+						.uid("Input");*/
+						
+		DataStream<ProspectCompany> input = env
+						.addSource(
+							new FlinkKafkaConsumer<>(
+							parameterTool.getRequired("kafka.input.topic"),  
+							ConfluentRegistryAvroDeserializationSchema.forSpecific(
+								ProspectCompany.class,
+								parameterTool.getRequired("schema.registry.url")), 
+							parameterTool.getProperties()))
+						.uid("Input");				
 						
 		// Consumed events are parsed to ProspectCompany for aggregation 				
 		DataStream<AggregatedProspectCompany> prospectStream =	input
@@ -103,8 +113,43 @@ public class InjestionTimeAggregateJob {
 		}
 	}
 
+	private static class AggreateProspectCompany implements FlatMapFunction<ProspectCompany, AggregatedProspectCompany> {
+
+		private static final long serialVersionUID = -686876771747690202L;
+
+		@Override
+		public void flatMap(ProspectCompany prospectCompany,  Collector<AggregatedProspectCompany> collector){
+
+			KafkaProducer<String,String> producer = null;
+			ProducerRecord<String,String> producerRec = null;	
+			try {
+				AggregatedProspectCompany apc = new AggregatedProspectCompany();
+				apc.addCompany(prospectCompany);
+				apc.setId(prospectCompany.getId());
+				collector.collect(apc);
+			} catch (Exception e) {
+				log.error("Error deserialzing Prospect company", e);
+				producer = Util.newKakfaProducer();
+				// TODO: Define new error message payload 
+				producerRec = new ProducerRecord<String,String>
+								   (parameterTool.getRequired("kafka.DQL.topic"),
+								    e.getMessage());
+				// TODO: Implement a async send
+				try {
+					producer.send(producerRec).get();
+				}catch(Exception kse){
+					log.error("Error writing message to dead letter Q", kse);
+				}
+			}finally{
+				if(producer != null){
+					producer.close();
+				}				
+			}
+		}
+	}
+
 	//Serializes to AggregatedProspectCompany for reduction
-	private static class AggreateProspectCompany implements FlatMapFunction<String, AggregatedProspectCompany> {
+	/*private static class AggreateProspectCompany implements FlatMapFunction<String, AggregatedProspectCompany> {
 
 		private static final long serialVersionUID = -686876771747690202L;
 
@@ -138,7 +183,7 @@ public class InjestionTimeAggregateJob {
 				}				
 			}
 		}
-	}
+	}*/
 
 	//Serialize to JSON for Kafka sink 
 	private static class AggregatedProspectToString implements MapFunction<AggregatedProspectCompany, String> {

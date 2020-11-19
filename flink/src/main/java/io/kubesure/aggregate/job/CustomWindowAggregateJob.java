@@ -65,8 +65,8 @@ public class CustomWindowAggregateJob {
 								private static final long serialVersionUID = -686876346234753642L;	
 								@Override
 								public long extractTimestamp(ProspectCompany element) {
-									log.info("New Event Time     - {}", TimeUtil.ISOString(element.getEventTime().getMillis()));
-									return element.getEventTime().getMillis();
+									log.info("New Event Time     - {}", TimeUtil.ISOString(element.getEventTime()));
+									return element.getEventTime();
 								}
 						}).uid("Input");
 
