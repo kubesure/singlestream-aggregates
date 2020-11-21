@@ -8,6 +8,7 @@ import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.formats.avro.registry.confluent.ConfluentRegistryAvroDeserializationSchema;
+import org.apache.flink.formats.avro.registry.confluent.ConfluentRegistryAvroSerializationSchema;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -23,7 +24,6 @@ import org.slf4j.LoggerFactory;
 import io.kubesure.aggregate.datatypes.AggregatedProspectCompany;
 import io.kubesure.aggregate.datatypes.ProspectCompany;
 import io.kubesure.aggregate.util.Convertor;
-import io.kubesure.aggregate.util.KafkaUtil;
 import io.kubesure.aggregate.util.Util;
 
 
@@ -87,19 +87,28 @@ public class InjestionTimeAggregateJob {
 						.reduce(new ProspectCompanyReduce())
 						.uid("AggregateProspects");
 
+		keyedPCStreams.print();				
+
 		//Aggregated events are serialzied to JSON for sink push
-		DataStream<String> aggregatedStream = keyedPCStreams
+		/*DataStream<String> aggregatedStream = keyedPCStreams
 						.map(new AggregatedProspectToString())
-						.uid("ProspectToJSON");
+						.uid("ProspectToJSON");*/
 		
 		//Results are push to kafka skin kafka.sink.results.topic 				
-		FlinkKafkaProducer<String> kafkaProducer = KafkaUtil.newFlinkKafkaProducer
+		/*FlinkKafkaProducer<String> kafkaProducer = KafkaUtil.newFlinkKafkaProducer
 												   (parameterTool.getRequired("kafka.sink.results.topic"),
-													parameterTool);
+													parameterTool);*/
+		 FlinkKafkaProducer<AggregatedProspectCompany> kafkaProducer = new FlinkKafkaProducer<>(
+		 								parameterTool.getRequired("kafka.sink.results.topic"),  
+		 								ConfluentRegistryAvroSerializationSchema.forSpecific(
+		 									AggregatedProspectCompany.class,
+		 									parameterTool.getRequired("output-subject"),
+		 									parameterTool.getRequired("schema.registry.url")),
+		 								parameterTool.getProperties()
+		 							);					
 													
-		aggregatedStream.print();											
-		aggregatedStream.addSink(kafkaProducer)
-						.uid("ToKafkaSink");	
+		keyedPCStreams.addSink(kafkaProducer)
+		 			  .uid("ToKafkaSink");	
 
 		env.execute("injestion time aggregation");
 	}
@@ -139,7 +148,7 @@ public class InjestionTimeAggregateJob {
 				producerRec = new ProducerRecord<String,String>
 								   (parameterTool.getRequired("kafka.DQL.topic"),
 								    e.getMessage());
-				// TODO: Implement a async send
+				// TODO: Implement as sideoutput to kafka using avro format
 				try {
 					producer.send(producerRec).get();
 				}catch(Exception kse){
