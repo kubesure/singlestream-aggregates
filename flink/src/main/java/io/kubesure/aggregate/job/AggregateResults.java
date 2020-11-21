@@ -1,5 +1,6 @@
 package io.kubesure.aggregate.job;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -36,29 +37,31 @@ class AggregateResults extends ProcessWindowFunction<ProspectCompany, Aggregated
 				}	
 
 				AggregatedProspectCompany agpc = new AggregatedProspectCompany();
+				List<ProspectCompany> prospectCompanies = new ArrayList<ProspectCompany>();
 				for (ProspectCompany pc : elements) {
-					agpc.addCompany(pc);
+					prospectCompanies.add(pc);
 					agpc.setId(pc.getId());
 				}
+				agpc.setCompanies(prospectCompanies);
 
 				//remove duplicate elements generated for late events arrived 
 				//window.time.seconds and window.time.lateness 
-				List<ProspectCompany> distinctProspectCo = agpc.getProspectCompanies()
+				List<ProspectCompany> distinctProspectCo = agpc.getCompanies()
 				 									           .stream()
 													           .distinct()
 													           .collect(Collectors.toList());
-				agpc.setProspectCompanies(distinctProspectCo);									   
+				agpc.setCompanies(distinctProspectCo);									   
 
 				//Sort out of order event by event time 
-				agpc.getProspectCompanies().sort(Comparator.comparing(ProspectCompany::getEventTime));
+				//TODO: re impl Comparable which has to dropped for avro schema generation  
+				agpc.getCompanies().sort(Comparator.comparing(ProspectCompany::getEventTime));
 
 				if(log.isInfoEnabled()){
-					for (ProspectCompany pc1 : agpc.getProspectCompanies()) {
+					for (ProspectCompany pc1 : agpc.getCompanies()) {
 						log.info("Agg Event time     - {}" , TimeUtil.ISOString(pc1.getEventTime()));
 					}
 					log.info("Window end time    - {}" , TimeUtil.ISOString(context.window().getEnd())); 
 				}
-
 				out.collect(agpc);		
 		}
 	}

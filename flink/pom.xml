@@ -48,7 +48,7 @@ under the License.
 		<scala.binary.version>2.11</scala.binary.version>
 		<maven.compiler.source>${java.version}</maven.compiler.source>
 		<maven.compiler.target>${java.version}</maven.compiler.target>
-		<junit.version>4.12</junit.version>
+		<junit.version>4.13.1</junit.version>
 	</properties>
 
 	<repositories>
@@ -285,15 +285,20 @@ under the License.
 				<version>1.10.0</version>
 				<executions>
 					<execution>
-					<phase>generate-sources</phase>
-					<goals>
-						<goal>schema</goal>
-					</goals>
-					<configuration>
-						<sourceDirectory>${project.basedir}/src/main/avro/</sourceDirectory>
-						<outputDirectory>${project.basedir}/src/main/java/</outputDirectory>
-					</configuration>
-					</execution>
+						<phase>generate-sources</phase>
+						<goals>
+							<goal>schema</goal>
+						</goals>
+						<configuration>
+							<sourceDirectory>${project.basedir}/src/main/avro/</sourceDirectory>
+							<outputDirectory>${project.basedir}/src/main/java/</outputDirectory>
+							<imports>
+								<import>${project.basedir}/src/main/avro/prospectcompany.avsc</import>
+								<import>${project.basedir}/src/main/avro/aggregatedprospectcompany.avsc</import>
+								
+							</imports>
+						</configuration>
+ 					</execution>
 				</executions>
 				</plugin>
 				<plugin>

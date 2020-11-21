@@ -1,5 +1,8 @@
 package io.kubesure.aggregate.job;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
@@ -108,7 +111,7 @@ public class InjestionTimeAggregateJob {
 
 		public AggregatedProspectCompany reduce(
 			                              AggregatedProspectCompany agc1, AggregatedProspectCompany agc2) {
-			agc1.addCompany(agc2.getProspectCompany());
+			agc1.setCompanies(agc2.getCompanies());
 			return agc1;
 		}
 	}
@@ -124,7 +127,9 @@ public class InjestionTimeAggregateJob {
 			ProducerRecord<String,String> producerRec = null;	
 			try {
 				AggregatedProspectCompany apc = new AggregatedProspectCompany();
-				apc.addCompany(prospectCompany);
+				List<ProspectCompany> prospectCompanies = new ArrayList<ProspectCompany>();
+				prospectCompanies.add(prospectCompany);
+				apc.setCompanies(prospectCompanies);
 				apc.setId(prospectCompany.getId());
 				collector.collect(apc);
 			} catch (Exception e) {

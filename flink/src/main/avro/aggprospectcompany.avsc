@@ -1,0 +1,18 @@
+{
+ "type": "record",   
+ "name": "AggregatedProspectCompany",
+ "namespace": "io.kubesure.aggregate.datatypes",
+ "doc": "Holds lists of prospect companies",
+ "fields": [
+    {"name": "id", "type": "long"},
+    {
+        "name": "companies",
+        "type": {
+            "type": "array",
+            "items":{
+                "type": "ProspectCompany"
+            }
+        }
+    }
+ ]
+}

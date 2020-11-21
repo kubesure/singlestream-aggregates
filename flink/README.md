@@ -18,6 +18,8 @@ kafka-topics --create --bootstrap-server localhost:9092 --partitions 1 --replica
 ## Build and Test
 
 ``` 
+mvn clean generate-sources
+
 mvn clean package
 
 /opt/fink/start-cluster.sh
