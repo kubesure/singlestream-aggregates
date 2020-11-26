@@ -6,14 +6,10 @@ import java.util.List;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.java.utils.ParameterTool;
-import org.apache.flink.formats.avro.registry.confluent.ConfluentRegistryAvroDeserializationSchema;
-import org.apache.flink.formats.avro.registry.confluent.ConfluentRegistryAvroSerializationSchema;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.time.Time;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer;
 import org.apache.flink.util.Collector;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -22,6 +18,8 @@ import org.slf4j.LoggerFactory;
 
 import io.kubesure.aggregate.datatypes.AggregatedProspectCompany;
 import io.kubesure.aggregate.datatypes.ProspectCompany;
+import io.kubesure.aggregate.sources.ProspectCompanySource;
+import io.kubesure.aggregate.util.KafkaUtil;
 import io.kubesure.aggregate.util.Util;
 
 
@@ -48,18 +46,12 @@ public class InjestionTimeAggregateJob {
 		env.setStreamTimeCharacteristic(TimeCharacteristic.IngestionTime);
 
 		// uncomment for unit testing. Tests only for one prospect company matches
-		//DataStream<String> input = env.addSource(new ProspectCompanySource(1,101,2000l));
+		//DataStream<ProspectCompany> input = env.addSource(new ProspectCompanySource(1,101,2000l));
 
 		// Comment for unit testing
 		// Pulls message from kafka.input.topic maps to ProspectCompany
 		DataStream<ProspectCompany> input = env
-						.addSource(
-							new FlinkKafkaConsumer<>(
-							parameterTool.getRequired("kafka.input.topic"),  
-							ConfluentRegistryAvroDeserializationSchema.forSpecific(
-								ProspectCompany.class,
-								parameterTool.getRequired("schema.registry.url")), 
-							parameterTool.getProperties()))
+						.addSource(KafkaUtil.newFlinkAvroConsumer(parameterTool))
 						.uid("Input");				
 						
 		// Consumed events are parsed to ProspectCompany for aggregation 				
@@ -79,16 +71,11 @@ public class InjestionTimeAggregateJob {
 		keyedPCStreams.print();				
 
 		//Results are push to kafka skin kafka.sink.results.topic 				
-		 FlinkKafkaProducer<AggregatedProspectCompany> kafkaProducer = new FlinkKafkaProducer<>(
-		 								parameterTool.getRequired("kafka.sink.results.topic"),  
-		 								ConfluentRegistryAvroSerializationSchema.forSpecific(
-		 									AggregatedProspectCompany.class,
-		 									parameterTool.getRequired("output-subject"),
-		 									parameterTool.getRequired("schema.registry.url")),
-		 								parameterTool.getProperties()
-		 							);					
-													
-		keyedPCStreams.addSink(kafkaProducer)
+		keyedPCStreams.addSink(KafkaUtil.newFlinkAvroProducer(
+											parameterTool.getRequired("kafka.sink.results.topic"),
+											AggregatedProspectCompany.class,
+											parameterTool.getRequired("output.result.subject"),
+											parameterTool))
 		 			  .uid("ToKafkaSink");	
 
 		env.execute("injestion time aggregation");
@@ -124,7 +111,7 @@ public class InjestionTimeAggregateJob {
 				collector.collect(apc);
 			} catch (Exception e) {
 				log.error("Error deserialzing Prospect company", e);
-				producer = Util.newKakfaProducer();
+				producer = KafkaUtil.newKakfaProducer();
 				// TODO: Define new avro error message payload 
 				producerRec = new ProducerRecord<String,String>
 								   (parameterTool.getRequired("kafka.DQL.topic"),

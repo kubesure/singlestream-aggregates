@@ -4,8 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.kubesure.aggregate.datatypes.ProspectCompany;
-import io.kubesure.aggregate.sources.PCGenerator;
-import io.kubesure.aggregate.util.Convertor;
+import io.kubesure.aggregate.util.PCGenerator;
 
 
 public class ProsepctCompanySource extends CommonThread implements Runnable {

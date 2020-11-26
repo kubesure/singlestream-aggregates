@@ -1,4 +1,4 @@
-package io.kubesure.aggregate.sources;
+package io.kubesure.aggregate.util;
 
 
 import java.util.ArrayList;

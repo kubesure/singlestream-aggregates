@@ -5,9 +5,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.kubesure.aggregate.datatypes.ProspectCompany;
-import io.kubesure.aggregate.util.Convertor;
+import io.kubesure.aggregate.util.PCGenerator;
 
-public class ProspectCompanySource implements SourceFunction<String>{
+public class ProspectCompanySource implements SourceFunction<ProspectCompany>{
 
     private static final long serialVersionUID = -686876771747650202L;
     private static final Logger log = LoggerFactory.getLogger(ProspectCompanySource.class);
@@ -29,11 +29,10 @@ public class ProspectCompanySource implements SourceFunction<String>{
     public ProspectCompanySource(){}
 
     @Override
-    public void run(SourceContext<String> ctx) throws Exception {
+    public void run(SourceContext<ProspectCompany> ctx) throws Exception {
         while (produce != 0) {
             for (int i = 0; i < 10; i++) {
-                ProspectCompany pc = PCGenerator.generateProspectCompany(prospectCompanyStartID);
-                ctx.collect(Convertor.convertProspectCompanyToJson(pc));
+                ctx.collect(PCGenerator.generateProspectCompany(i));
                 Thread.sleep(withDelay);    
             }
             --produce;

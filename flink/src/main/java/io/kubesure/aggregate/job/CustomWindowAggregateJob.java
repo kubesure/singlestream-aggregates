@@ -50,16 +50,10 @@ public class CustomWindowAggregateJob {
 		StreamExecutionEnvironment env = Util.prepareExecutionEnv(parameterTool);
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-		// TODO: Parse json with custom schema or implement Arvo schema
 		// Pulls message from kafka.input.topic maps to ProspectCompany and watermarks 
 		// are generated with a delay of 10 second over event time stamp.    
 		DataStream<ProspectCompany> inputStream = env
-		            	.addSource(
-							new FlinkKafkaConsumer<>(
-								parameterTool.getRequired("kafka.input.topic"), 
-								new SimpleStringSchema(), 
-								parameterTool.getProperties()))
-						.flatMap(new JSONToProspectCompany(parameterTool))
+		            	.addSource(KafkaUtil.newFlinkAvroConsumer(parameterTool))
 						.assignTimestampsAndWatermarks
 							(new BoundedOutOfOrdernessTimestampExtractor<ProspectCompany>(Time.seconds(10)) {
 								private static final long serialVersionUID = -686876346234753642L;	
@@ -86,22 +80,24 @@ public class CustomWindowAggregateJob {
 		// Late events are delivered to kafka.sink.lateevents.topic  
 		results.getSideOutput(lateEvents)					 					 
 							.map(new LateProspectCounter())
-							.map(new ProspectCompanyToJSON())
-							.addSink(KafkaUtil.newFlinkKafkaProducer
+							.addSink(KafkaUtil.newFlinkAvroProducer
 									(parameterTool.getRequired("kafka.sink.lateevents.topic"),
+									ProspectCompany.class,
+									parameterTool.getRequired("output.late.result.subject"),									  
 							 		parameterTool))
-							.uid("LateProspetcSink");
+							.uid("LateProspectSink");
 
 		if(log.isInfoEnabled()) {
 			results.print();
 		}
 		
 		// Aggregated results with window.time.seconds are delivered to kafka sink
-		results.map(new ResultsToJSON())
-							.addSink(KafkaUtil.newFlinkKafkaProducer
-									(parameterTool.getRequired("kafka.sink.results.topic"),
-							  		 parameterTool))
-							.uid("Results");
+		results.addSink(KafkaUtil.newFlinkAvroProducer(
+										parameterTool.getRequired("kafka.sink.results.topic"),
+										AggregatedProspectCompany.class,
+										parameterTool.getRequired("output.result.subject"),
+										parameterTool))
+				.uid("Results");
 
 		env.execute("event time aggregation");
 	}

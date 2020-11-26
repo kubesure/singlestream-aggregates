@@ -1,6 +1,5 @@
 package io.kubesure.aggregate.job;
 
-import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -8,7 +7,6 @@ import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
 import org.apache.flink.streaming.api.windowing.time.Time;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.util.OutputTag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,16 +45,10 @@ public class EventTimeAggregateJob {
 		StreamExecutionEnvironment env = Util.prepareExecutionEnv(parameterTool);
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-		// TODO: Parse json with custom schema or implement Arvo schema
 		// Pulls message from kafka.input.topic maps to ProspectCompany and watermarks 
 		// are generated with a delay of 10 second over event time stamp.    
 		DataStream<ProspectCompany> inputStream = env
-		            	.addSource(
-							new FlinkKafkaConsumer<>(
-								parameterTool.getRequired("kafka.input.topic"), 
-								new SimpleStringSchema(), 
-								parameterTool.getProperties()))
-						.flatMap(new JSONToProspectCompany(parameterTool))
+		            	.addSource(KafkaUtil.newFlinkAvroConsumer(parameterTool)) 
 						.assignTimestampsAndWatermarks
 							(new BoundedOutOfOrdernessTimestampExtractor<ProspectCompany>(Time.seconds(10)) {
 								private static final long serialVersionUID = -686876346234753642L;	
@@ -86,22 +78,25 @@ public class EventTimeAggregateJob {
 		// Late events are delivered to kafka.sink.lateevents.topic  
 		results.getSideOutput(lateEvents)					 					 
 							.map(new LateProspectCounter())
-							.map(new ProspectCompanyToJSON())
-							.addSink(KafkaUtil.newFlinkKafkaProducer
-									(parameterTool.getRequired("kafka.sink.lateevents.topic"),
-							 		parameterTool))
+							.addSink(KafkaUtil.newFlinkAvroProducer
+								(parameterTool.getRequired("kafka.sink.lateevents.topic"),
+								ProspectCompany.class,
+								parameterTool.getRequired("output.late.result.subject"),									  
+								 parameterTool))
 							.uid("LateProspetcSink");
 
 		if(log.isInfoEnabled()) {
 			results.print();
 		}
-		
+
+		//Results are push to kafka skin kafka.sink.results.topic 				
 		// Aggregated results with window.time.seconds are delivered to kafka sink
-		results.map(new ResultsToJSON())
-							.addSink(KafkaUtil.newFlinkKafkaProducer
-									(parameterTool.getRequired("kafka.sink.results.topic"),
-							  		 parameterTool))
-							.uid("Results");
+		results.addSink(KafkaUtil.newFlinkAvroProducer(
+										parameterTool.getRequired("kafka.sink.results.topic"),
+										AggregatedProspectCompany.class,
+										parameterTool.getRequired("output.result.subject"),
+										parameterTool))
+				.uid("Results");
 
 		env.execute("event time aggregation");
 	}
