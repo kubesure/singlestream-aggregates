@@ -136,6 +136,10 @@
             <configuration>
               <sourceDirectory>${project.basedir}/src/main/avro/</sourceDirectory>
               <outputDirectory>${project.basedir}/src/main/java/</outputDirectory>
+              <imports>
+                <import>${project.basedir}/src/main/avro/prospectcompany.avsc</import>
+                <import>${project.basedir}/src/main/avro/aggregatedprospectcompany.avsc</import>
+              </imports>
             </configuration>
           </execution>
         </executions>
@@ -159,12 +163,17 @@
       <name>Apache Development Snapshot Repository</name>
       <url>https://repository.apache.org/content/repositories/snapshots/</url>
     </repository>
+    <repository>
+      <id>confluent</id>
+      <name>Confluent</name>
+      <url>https://packages.confluent.io/maven/</url>
+    </repository>
   </repositories>
   <dependencies>
     <dependency>
       <groupId>org.apache.flink</groupId>
       <artifactId>flink-java</artifactId>
-      <version>1.10.0</version>
+      <version>1.11.0</version>
       <scope>provided</scope>
       <exclusions>
         <exclusion>
@@ -176,7 +185,7 @@
     <dependency>
       <groupId>org.apache.flink</groupId>
       <artifactId>flink-streaming-java_2.11</artifactId>
-      <version>1.10.0</version>
+      <version>1.11.0</version>
       <scope>provided</scope>
       <exclusions>
         <exclusion>
@@ -188,20 +197,20 @@
     <dependency>
       <groupId>org.apache.flink</groupId>
       <artifactId>flink-core</artifactId>
-      <version>1.10.0</version>
+      <version>1.11.0</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.flink</groupId>
       <artifactId>flink-runtime_2.11</artifactId>
-      <version>1.10.0</version>
+      <version>1.11.0</version>
       <classifier>tests</classifier>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.flink</groupId>
       <artifactId>flink-streaming-java_2.11</artifactId>
-      <version>1.10.0</version>
+      <version>1.11.0</version>
       <type>test-jar</type>
       <scope>test</scope>
       <exclusions>
@@ -214,7 +223,7 @@
     <dependency>
       <groupId>org.apache.flink</groupId>
       <artifactId>flink-test-utils_2.11</artifactId>
-      <version>1.10.0</version>
+      <version>1.11.0</version>
       <scope>test</scope>
       <exclusions>
         <exclusion>
@@ -227,12 +236,6 @@
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-log4j12</artifactId>
       <version>1.7.7</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>log4j</groupId>
-      <artifactId>log4j</artifactId>
-      <version>1.2.17</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
@@ -261,6 +264,6 @@
     <maven.compiler.source>${java.version}</maven.compiler.source>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <junit.version>4.13.1</junit.version>
-    <flink.version>1.10.0</flink.version>
+    <flink.version>1.11.0</flink.version>
   </properties>
 </project>

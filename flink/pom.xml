@@ -63,7 +63,14 @@ under the License.
 				<enabled>true</enabled>
 			</snapshots>
 		</repository>
+		<repository>
+      		<id>confluent</id>
+      		<name>Confluent</name>
+      		<url>https://packages.confluent.io/maven/</url>
+    	</repository>
 	</repositories>
+
+	
 
 	<dependencies>
 		<!-- Apache Flink dependencies -->
@@ -126,10 +133,15 @@ under the License.
 			<version>1.7.7</version>
 		</dependency>
 		<dependency>
+        	<groupId>io.confluent</groupId>
+        	<artifactId>confluent-log4j</artifactId>
+			<version>1.2.17-cp2</version>
+    	</dependency>
+		<!--<dependency>
 			<groupId>log4j</groupId>
 			<artifactId>log4j</artifactId>
 			<version>1.2.17</version>
-		</dependency>
+		</dependency> -->
 		<dependency>
 			<groupId>joda-time</groupId>
 			<artifactId>joda-time</artifactId>
@@ -151,12 +163,12 @@ under the License.
 		  <artifactId>flink-connector-kafka_2.12</artifactId>
 		  <version>1.11.2</version>
 	    </dependency>
-		<!--<dependency>
+		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-avro</artifactId>
 			<version>1.11.2</version>
-		</dependency>-->
-		<dependency>
+		</dependency>
+		<dependency> 	
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-avro-confluent-registry</artifactId>
 			<version>1.11.2</version> 
@@ -166,6 +178,31 @@ under the License.
   			<artifactId>avro</artifactId>
   			<version>1.10.0</version>
 		</dependency>
+		<dependency>
+			<groupId>io.confluent</groupId>
+			<artifactId>kafka-avro-serializer</artifactId>
+			<version>6.0.0</version>
+    	</dependency>
+		<dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <version>2.6.0</version>
+        </dependency>
+		<dependency>
+   			<groupId>io.confluent</groupId>
+    		<artifactId>kafka-schema-registry-client</artifactId>
+    		<version>6.0.0</version>
+		</dependency>
+		<!-- <dependency>
+    		<groupId>io.confluent</groupId>
+    		<artifactId>common-config</artifactId>
+    		<version>6.0.0</version>
+		</dependency> 
+		<dependency>
+			<groupId>io.confluent</groupId>
+			<artifactId>common-utils</artifactId>
+			<version>6.0.0</version>
+		</dependency> -->
 	</dependencies>
 	<build>
 		<plugins>

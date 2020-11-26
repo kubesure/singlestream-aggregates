@@ -32,12 +32,14 @@ public class ProsepctCompanySource extends CommonThread implements Runnable {
         for (int i = 0; i < produce; i++) {
             try {
                 ProspectCompany pc = PCGenerator.generateProspectCompany(id);
-                send(Convertor.convertProspectCompanyToJson(pc), "AggregateProspect");
+                sendProspectCompany(pc, "AggregateProspect");
                 Thread.sleep(INTERVAL_TIME);
             } catch (InterruptedException txp) {
                 log.error("Error sleeping thread", txp);  
             }   
             catch (Exception e) {
+                e.printStackTrace();
+                System.out.println(e.getMessage());
                 log.error("Error sending payment to kafka", e);
             }
         }

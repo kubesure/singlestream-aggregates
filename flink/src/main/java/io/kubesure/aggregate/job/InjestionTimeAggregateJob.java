@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
-import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.formats.avro.registry.confluent.ConfluentRegistryAvroDeserializationSchema;
@@ -23,7 +22,6 @@ import org.slf4j.LoggerFactory;
 
 import io.kubesure.aggregate.datatypes.AggregatedProspectCompany;
 import io.kubesure.aggregate.datatypes.ProspectCompany;
-import io.kubesure.aggregate.util.Convertor;
 import io.kubesure.aggregate.util.Util;
 
 
@@ -54,15 +52,6 @@ public class InjestionTimeAggregateJob {
 
 		// Comment for unit testing
 		// Pulls message from kafka.input.topic maps to ProspectCompany
-		// TODO: Implement Avro  
-		/*DataStream<String> input = env
-						.addSource(
-							new FlinkKafkaConsumer<>(
-							parameterTool.getRequired("kafka.input.topic"),  
-							new SimpleStringSchema(), 
-							parameterTool.getProperties()))
-						.uid("Input");*/
-						
 		DataStream<ProspectCompany> input = env
 						.addSource(
 							new FlinkKafkaConsumer<>(
@@ -89,15 +78,7 @@ public class InjestionTimeAggregateJob {
 
 		keyedPCStreams.print();				
 
-		//Aggregated events are serialzied to JSON for sink push
-		/*DataStream<String> aggregatedStream = keyedPCStreams
-						.map(new AggregatedProspectToString())
-						.uid("ProspectToJSON");*/
-		
 		//Results are push to kafka skin kafka.sink.results.topic 				
-		/*FlinkKafkaProducer<String> kafkaProducer = KafkaUtil.newFlinkKafkaProducer
-												   (parameterTool.getRequired("kafka.sink.results.topic"),
-													parameterTool);*/
 		 FlinkKafkaProducer<AggregatedProspectCompany> kafkaProducer = new FlinkKafkaProducer<>(
 		 								parameterTool.getRequired("kafka.sink.results.topic"),  
 		 								ConfluentRegistryAvroSerializationSchema.forSpecific(
@@ -120,7 +101,7 @@ public class InjestionTimeAggregateJob {
 
 		public AggregatedProspectCompany reduce(
 			                              AggregatedProspectCompany agc1, AggregatedProspectCompany agc2) {
-			agc1.setCompanies(agc2.getCompanies());
+			agc1.getCompanies().addAll(agc2.getCompanies());								  
 			return agc1;
 		}
 	}
@@ -144,7 +125,7 @@ public class InjestionTimeAggregateJob {
 			} catch (Exception e) {
 				log.error("Error deserialzing Prospect company", e);
 				producer = Util.newKakfaProducer();
-				// TODO: Define new error message payload 
+				// TODO: Define new avro error message payload 
 				producerRec = new ProducerRecord<String,String>
 								   (parameterTool.getRequired("kafka.DQL.topic"),
 								    e.getMessage());
@@ -161,58 +142,4 @@ public class InjestionTimeAggregateJob {
 			}
 		}
 	}
-
-	//Serializes to AggregatedProspectCompany for reduction
-	/*private static class AggreateProspectCompany implements FlatMapFunction<String, AggregatedProspectCompany> {
-
-		private static final long serialVersionUID = -686876771747690202L;
-
-		@Override
-		public void flatMap(String prospectCompany,  Collector<AggregatedProspectCompany> collector){
-
-			KafkaProducer<String,String> producer = null;
-			ProducerRecord<String,String> producerRec = null;	
-			try {
-				ProspectCompany pc = Convertor.convertToProspectCompany(prospectCompany);
-				AggregatedProspectCompany apc = new AggregatedProspectCompany();
-				apc.addCompany(pc);
-				apc.setId(pc.getId());
-				collector.collect(apc);
-			} catch (Exception e) {
-				log.error("Error deserialzing Prospect company", e);
-				producer = Util.newKakfaProducer();
-				// TODO: Define new error message payload 
-				producerRec = new ProducerRecord<String,String>
-								   (parameterTool.getRequired("kafka.DQL.topic"),
-								    e.getMessage());
-				// TODO: Implement a async send
-				try {
-					producer.send(producerRec).get();
-				}catch(Exception kse){
-					log.error("Error writing message to dead letter Q", kse);
-				}
-			}finally{
-				if(producer != null){
-					producer.close();
-				}				
-			}
-		}
-	}*/
-
-	//Serialize to JSON for Kafka sink 
-	private static class AggregatedProspectToString implements MapFunction<AggregatedProspectCompany, String> {
-
-		private static final long serialVersionUID = -686876771747614202L;
-
-		@Override
-		public String map(AggregatedProspectCompany agpc) throws Exception {
-			try {
-				return Convertor.convertAggregatedProspectCompanyToJson(agpc);
-			} catch (Exception e) {
-				// TODO: handle exception post error to dead letter for re-processing
-				log.error("Error serialzing aggregate prospect company", e);
-			}
-			return null;
-		}	
-	}	
 }

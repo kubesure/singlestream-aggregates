@@ -7,18 +7,13 @@ import io.kubesure.aggregate.datatypes.ProspectCompany.Builder;
 
 public class PCGenerator {
     public static ProspectCompany generateProspectCompany(long id){
-        Builder builder = ProspectCompany.newBuilder();
-        builder.setId(id);
-        builder.setCompanyName("Skynight Inc");
-        builder.setTradeLicenseNumber("Trd4534rF");
-        builder.setMatch(false);
-        builder.setEventTime(new DateTime().getMillis());
+        Builder builder = ProspectCompany.newBuilder()
+        .setId(id)
+        .setCompanyName("Skynight Inc")
+        .setTradeLicenseNumber("Trd4534rF")
+        .setMatch(false)
+        .setEventTime(new DateTime().getMillis())
+        .setShareHolders(PGenerator.generateProspects());
         return builder.build();
-    }
-
-    private ProspectCompany newProspectCompany(long transactionID){
-        ProspectCompany pc = PCGenerator.generateProspectCompany(transactionID);
-        pc.setShareHolders(PGenerator.generateProspects());
-        return pc;
     }
 }
